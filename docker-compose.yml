@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./gee-sa-key.json:/app/gee-sa-key.json:ro   # mount key — never bake into image
+      - ./aranyai.db:/app/aranyai.db                  # persist SQLite across restarts
+    env_file: .env
+    environment:
+      GEE_KEY_FILE: /app/gee-sa-key.json
+      DATABASE_URL: sqlite:////app/aranyai.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      BACKEND_URL: http://backend:8080          # Vite proxy target (container name)
+      VITE_MAPBOX_TOKEN: ${MAPBOX_TOKEN}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

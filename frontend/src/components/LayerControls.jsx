@@ -1,0 +1,123 @@
+const PANEL = {
+  position: 'absolute', bottom: '36px', left: '12px', zIndex: 100,
+  background: '#FFFFFF', border: '1px solid #D1D5DB',
+  borderRadius: '4px', boxShadow: '0 2px 8px rgba(0,0,0,.10)',
+  width: '210px', overflow: 'hidden', fontFamily: "'Inter','Noto Sans',system-ui,sans-serif",
+}
+const HEAD = {
+  background: '#F9FAFB', borderBottom: '1px solid #E5E7EB',
+  padding: '7px 10px', fontSize: '10px', fontWeight: 700,
+  textTransform: 'uppercase', letterSpacing: '.8px', color: '#1A3C6E',
+}
+const BODY = { padding: '10px 10px 12px' }
+const SUBLABEL = {
+  fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+  letterSpacing: '.5px', color: '#6B7280', marginBottom: '6px', display: 'block',
+}
+const ROW = {
+  display: 'flex', alignItems: 'center', gap: '7px',
+  marginBottom: '5px', cursor: 'pointer', fontSize: '12px', color: '#374151',
+  userSelect: 'none',
+}
+const HR = { border: 'none', borderTop: '1px solid #E5E7EB', margin: '8px 0' }
+
+export default function LayerControls({ layers, onChange, hasTiles }) {
+  /* Hidden until a run has completed and tiles exist */
+  if (!hasTiles) return null
+
+  const set = patch => onChange(prev => ({ ...prev, ...patch }))
+
+  return (
+    <div style={PANEL}>
+      <div style={HEAD}>Layer Controls</div>
+      <div style={BODY}>
+
+        {/* ── Satellite Imagery ─────────────────────────────────── */}
+        <span style={SUBLABEL}>Satellite Imagery</span>
+        {[
+          { val: 'satellite', label: 'Current (Mapbox)' },
+          { val: 'before',    label: 'Before Detection'  },
+          { val: 'after',     label: 'After Detection'   },
+        ].map(({ val, label }) => (
+          <label key={val} style={ROW}>
+            <input
+              type="radio" name="aranyai-imagery" value={val}
+              checked={layers.imagery === val}
+              onChange={() => set({ imagery: val })}
+              style={{ accentColor: '#1A3C6E' }}
+            />
+            {label}
+          </label>
+        ))}
+
+        <hr style={HR} />
+
+        {/* ── Overlays ─────────────────────────────────────────── */}
+        <span style={SUBLABEL}>Classification Overlays</span>
+
+        <label style={ROW}>
+          <input
+            type="checkbox" checked={layers.dw ?? true}
+            onChange={e => set({ dw: e.target.checked })}
+            style={{ accentColor: '#1A3C6E' }}
+          />
+          DW Classification Mask
+        </label>
+
+        <label style={ROW}>
+          <input
+            type="checkbox" checked={layers.changes ?? true}
+            onChange={e => set({ changes: e.target.checked })}
+            style={{ accentColor: '#1A3C6E' }}
+          />
+          Change Polygons
+        </label>
+
+        {/* ── DW Legend ─────────────────────────────────────────── */}
+        {layers.dw && (
+          <>
+            <hr style={HR} />
+            <span style={{ ...SUBLABEL, marginBottom: '5px' }}>DW Class Legend</span>
+            {[
+              ['#397d49','Trees / Forest'],
+              ['#88b053','Grassland'],
+              ['#e49635','Crops'],
+              ['#c4281b','Built-up'],
+              ['#a59b8f','Bare Soil'],
+              ['#419bdf','Water'],
+            ].map(([color, label]) => (
+              <div key={label} style={{ display:'flex', alignItems:'center', gap:'6px',
+                                        fontSize:'11px', color:'#4B5563', marginBottom:'3px' }}>
+                <span style={{ width:10, height:10, background:color,
+                               display:'inline-block', borderRadius:2, flexShrink:0 }} />
+                {label}
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* ── Change Type Legend ────────────────────────────────── */}
+        {layers.changes && (
+          <>
+            <hr style={HR} />
+            <span style={{ ...SUBLABEL, marginBottom: '5px' }}>Change Types</span>
+            {[
+              ['#B91C1C','Deforestation'],
+              ['#C2410C','Encroachment'],
+              ['#A16207','Agri. Encroachment'],
+              ['#6D28D9','Tree → Bare'],
+            ].map(([color, label]) => (
+              <div key={label} style={{ display:'flex', alignItems:'center', gap:'6px',
+                                        fontSize:'11px', color:'#4B5563', marginBottom:'3px' }}>
+                <span style={{ width:10, height:10, background:color,
+                               display:'inline-block', borderRadius:2, flexShrink:0 }} />
+                {label}
+              </div>
+            ))}
+          </>
+        )}
+
+      </div>
+    </div>
+  )
+}
