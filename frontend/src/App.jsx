@@ -8,6 +8,8 @@ export default function App() {
   const [aois,          setAois]          = useState([])
   const [selectedAoiId, setSelectedAoiId] = useState(null)
   const [selectedAoi,   setSelectedAoi]   = useState(null)   // full record with geojson
+  const [preview,       setPreview]       = useState(null)   // quick land-cover snapshot
+  const [previewLoading,setPreviewLoading]= useState(false)
   const [activeRun,     setActiveRun]     = useState(null)
   const [tiles,         setTiles]         = useState(null)   // GEE tile URLs
   const [vectors,       setVectors]       = useState(null)   // change GeoJSON
@@ -33,7 +35,7 @@ export default function App() {
   /* ── Load AOI detail when selection changes ─────────────────────── */
   useEffect(() => {
     if (!selectedAoiId) return
-    setTiles(null); setVectors(null); setActiveRun(null)
+    setTiles(null); setVectors(null); setActiveRun(null); setPreview(null)
     Promise.all([
       api.getAoi(selectedAoiId),
       api.listAlerts({ aoi_id: selectedAoiId, status: 'open' }),
@@ -43,6 +45,13 @@ export default function App() {
       setAlerts(alertsData)
       setRunHistory(runsData)
     }).catch(err => console.error('AOI detail load:', err))
+
+    // Fast land-cover preview — no export task, shows context immediately
+    setPreviewLoading(true)
+    api.previewAoi(selectedAoiId)
+      .then(setPreview)
+      .catch(err => console.error('Preview load:', err))
+      .finally(() => setPreviewLoading(false))
   }, [selectedAoiId])
 
   /* ── Poll active run every 5 seconds ────────────────────────────── */
@@ -54,10 +63,13 @@ export default function App() {
         setActiveRun(run)
         if (['done', 'low_confidence'].includes(run.status)) {
           setPolling(false)
+          // run already contains class_distribution and baseline_distribution
+          // from GET /api/runs/{id} — update activeRun with the full record
+          setActiveRun(run)
           const [tilesData, vectorsData, alertsData, historyData] = await Promise.all([
             api.getRunTiles(run.id),
             api.getRunVectors(run.id),
-            api.listAlerts({ aoi_id: selectedAoiId, status: 'open' }),
+            api.listAlerts({ aoi_id: selectedAoiId }),
             api.listRuns(selectedAoiId),
           ])
           setTiles(tilesData)
@@ -78,7 +90,7 @@ export default function App() {
     if (!selectedAoiId || polling) return
     try {
       const run = await api.triggerDetect(selectedAoiId, nrtWindows())
-      setActiveRun({ ...run, id: run.run_id, status: 'running' })
+      setActiveRun({ ...run, status: 'running' })
       setPolling(true)
       setTiles(null); setVectors(null)
     } catch (err) {
@@ -139,6 +151,7 @@ export default function App() {
           <Map
             aoi={selectedAoi?.geojson}
             tiles={tiles}
+            preview={preview}
             vectors={vectors}
             layers={layers}
           />
@@ -146,6 +159,7 @@ export default function App() {
             layers={layers}
             onChange={setLayers}
             hasTiles={!!tiles}
+            hasPreview={!!preview?.dw_tile_url}
           />
         </div>
 
@@ -156,6 +170,8 @@ export default function App() {
             selectedAoiId={selectedAoiId}
             selectedAoi={selectedAoi}
             onSelectAoi={setSelectedAoiId}
+            preview={preview}
+            previewLoading={previewLoading}
             activeRun={activeRun}
             polling={polling}
             onDetect={handleDetect}

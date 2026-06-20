@@ -22,8 +22,8 @@ from pydantic import BaseModel
 from .config import settings
 from .database import Alert, AOI, Base, ChangeRun, ChangeVector, engine, get_session
 from .gee_runner import (
-    _composite, _init, annual_windows, get_tile_urls,
-    nrt_windows, run_gee_detection,
+    _class_distribution, _composite, _init, annual_windows, DW_PALETTE,
+    get_tile_urls, nrt_windows, run_gee_detection,
 )
 
 logging.basicConfig(
@@ -121,6 +121,56 @@ def get_aoi(aoi_id: str):
         }
 
 
+@app.get("/api/aois/{aoi_id}/preview")
+def preview_aoi(aoi_id: str, days: int = 30):
+    """
+    Fast land-cover snapshot for an AOI — no export task, no alerts, no DB write.
+    Use this immediately after selecting an AOI so the officer sees what's
+    actually there (tree %, crop %, built %...) before committing to a full
+    NRT/annual detection run, which is slower and creates a GCS export task.
+
+    Returns class_distribution (ha per DW class) and a clipped DW tile URL
+    for the last `days` days (default 30).
+    """
+    with get_session() as db:
+        aoi_row = db.query(AOI).filter(AOI.id == aoi_id).first()
+        if not aoi_row:
+            raise HTTPException(404, "AOI not found")
+        geojson = json.loads(aoi_row.geojson)
+
+    _init()
+    aoi = ee.Geometry(geojson)
+    end   = datetime.utcnow().date()
+    start = end - timedelta(days=days)
+
+    label, _, count = _composite(aoi, str(start), str(end))
+    if count == 0:
+        return {
+            "image_count":  0,
+            "window":       f"{start}/{end}",
+            "message":      "No clear Dynamic World images in this window — "
+                            "try a longer window or check for monsoon cloud cover.",
+            "aoi_geojson":  geojson,
+        }
+
+    distribution = _class_distribution(label, aoi)
+
+    tile_url = None
+    try:
+        vis = {"min": 0, "max": 8, "palette": DW_PALETTE}
+        tile_url = label.clip(aoi).visualize(**vis).getMapId()["tile_fetcher"].url_format
+    except Exception as exc:
+        logging.getLogger("aranyai.api").warning("preview tile failed: %s", exc)
+
+    return {
+        "image_count":        count,
+        "window":             f"{start}/{end}",
+        "class_distribution": distribution,
+        "dw_tile_url":        tile_url,
+        "aoi_geojson":        geojson,
+    }
+
+
 # ── Detection routes ──────────────────────────────────────────────────────────
 
 @app.post("/api/aois/{aoi_id}/detect", status_code=202)
@@ -216,8 +266,10 @@ def get_run(run_id: str):
                 "tree_to_bare":   run.tree_to_bare_ha,
                 "any_change":     run.any_change_ha,
             },
-            "raster_gcs":     run.raster_path,
-            "gee_task_ids":   json.loads(run.gee_task_ids or "{}"),
+            "raster_gcs":             run.raster_path,
+            "gee_task_ids":           json.loads(run.gee_task_ids or "{}"),
+            "class_distribution":     json.loads(run.class_distribution or "{}"),
+            "baseline_distribution":  json.loads(run.baseline_distribution or "{}"),
         }
 
 

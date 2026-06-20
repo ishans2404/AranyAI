@@ -123,6 +123,11 @@ def _composite(aoi, start: str, end: str):
         )
 
     mean  = dw.map(mask_low).select(CLASS_NAMES).mean()
+    # IMPORTANT: ee.Image has arrayArgmax(), NOT argmax() — confirmed against
+    # eedocs.txt method list for ee.Image. toArray() converts the 9 probability
+    # bands into a per-pixel array; arrayArgmax() returns a 1-element array
+    # holding the index of the highest-probability class; arrayGet([0])
+    # extracts that scalar index as the label value.
     label = mean.toArray().arrayArgmax().arrayGet([0]).rename("label").toUint8()
     return label, dw, count
 
@@ -156,6 +161,29 @@ def _confidence(aoi, collection, change_mask) -> float:
     return round(ee.Number(r).getInfo() or 0.0, 3)
 
 
+def _class_distribution(label_image, aoi) -> dict:
+    """
+    Returns {class_name: area_ha} for every DW class in the AOI.
+    Uses a single reduceRegion + frequencyHistogram call — efficient.
+    """
+    freq = label_image.reduceRegion(
+        reducer=ee.Reducer.frequencyHistogram(),
+        geometry=aoi,
+        scale=10,           # native DW resolution
+        maxPixels=1e13,
+        bestEffort=True,
+    ).get("label")
+
+    hist = (ee.Dictionary(freq).getInfo() or {})
+    # At scale=10m each pixel = 100 m² = 0.01 ha
+    pixel_ha = 0.01
+
+    return {
+        name: round(float(hist.get(str(i), 0) or 0) * pixel_ha, 2)
+        for i, name in enumerate(CLASS_NAMES)
+    }
+
+
 def _vectors(aoi, mask, change_type: str, area_ha: float) -> dict | None:
     """
     Inline vectorisation — OK for AOIs < 50 km².
@@ -186,16 +214,21 @@ def _vectors(aoi, mask, change_type: str, area_ha: float) -> dict | None:
 def get_tile_urls(aoi, baseline_end: str, current_end: str, current_label) -> dict:
     """
     Generate GEE tile URLs for the map panel.
-    dw_label  : DW classification overlay for current period
-    before_s2 : Clearest Sentinel-2 image before the change
-    after_s2  : Clearest Sentinel-2 image after the change
-    URLs expire ~2 h. Call again to refresh.
+
+    IMPORTANT — clip every image to the AOI before calling getMapId().
+    Without clipping, tile URLs serve the entire Sentinel-2 granule
+    (typically 100 km × 100 km) which looks wrong on the map.
+
+    dw_label  : DW classification overlay, clipped to AOI
+    before_s2 : Clearest Sentinel-2 image before change, clipped to AOI
+    after_s2  : Clearest Sentinel-2 image after change, clipped to AOI
+    URLs expire ~2 h; call again with refresh=true to regenerate.
     """
     S2_VIS = {"bands": ["B4", "B3", "B2"], "min": 0, "max": 3000, "gamma": 1.4}
     DW_VIS = {"min": 0, "max": 8, "palette": DW_PALETTE}
 
-    def best_s2(start: str, end: str, max_cloud: int = 30):
-        return (
+    def best_s2(start: str, end: str, max_cloud: int = 35):
+        img = (
             ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
             .filterBounds(aoi)
             .filterDate(start, end)
@@ -203,10 +236,15 @@ def get_tile_urls(aoi, baseline_end: str, current_end: str, current_label) -> di
             .sort("CLOUDY_PIXEL_PERCENTAGE")
             .first()
         )
+        return img
 
     def tile_url(image, vis: dict) -> str | None:
         try:
-            return image.visualize(**vis).getMapId()["tile_fetcher"].url_format
+            # ── Clip to AOI first ────────────────────────────────────────────
+            # This restricts the rendered tile to the AOI polygon only,
+            # preventing the full satellite scene from appearing on the map.
+            clipped = image.clip(aoi)
+            return clipped.visualize(**vis).getMapId()["tile_fetcher"].url_format
         except Exception as exc:
             log.warning("tile_url failed: %s", exc)
             return None
@@ -250,12 +288,17 @@ def find_first_detection(
     )
 
     def stamp(img):
-        ts = img.date().millis().toFloat()
+        # img.date().millis() returns ee.Number — a single scalar value,
+        # NOT a spatial image. ee.Number has no updateMask()/rename() per
+        # eedocs.txt (those are ee.Image-only methods). Must wrap the
+        # scalar into a constant image first so every pixel holds this
+        # image's timestamp, THEN the image-level masks apply correctly.
+        ts_value = img.date().millis()
+        ts_image = ee.Image.constant(ts_value).toFloat().rename("ts_ms")
         return (
-            ts
+            ts_image
             .updateMask(change_mask)
             .updateMask(img.select("label").eq(new_class_id))
-            .rename("ts_ms")
         )
 
     result = (
@@ -334,6 +377,14 @@ def run_gee_detection(
         areas["any_change"] = _area_ha(any_ch, aoi)
         log.info("[%s] areas_ha: %s", run_id[:8], areas)
 
+        # ── Current land cover distribution ──────────────────────────────────
+        # One frequencyHistogram call → {class_name: ha}
+        # Shows forest officers what's actually in the AOI right now.
+        log.info("[%s] computing class distribution…", run_id[:8])
+        baseline_dist = _class_distribution(b_label, aoi)
+        current_dist  = _class_distribution(c_label, aoi)
+        log.info("[%s] current dist: %s", run_id[:8], current_dist)
+
         # ── Tile URLs ────────────────────────────────────────────────────────
         urls = get_tile_urls(aoi, baseline_end, current_end, c_label)
 
@@ -371,12 +422,14 @@ def run_gee_detection(
             run.agri_in_forest_ha = areas["agri_in_forest"]
             run.tree_to_bare_ha   = areas["tree_to_bare"]
             run.any_change_ha     = areas["any_change"]
-            run.raster_path       = f"gs://{settings.gcs_bucket}/{gcs_key}.tif"
-            run.gee_task_ids      = json.dumps({"raster": gee_task_id})
-            run.dw_tile_url       = urls.get("dw_label")
-            run.before_tile_url   = urls.get("before_s2")
-            run.after_tile_url    = urls.get("after_s2")
-            run.tile_expires_at   = tile_expires
+            run.raster_path            = f"gs://{settings.gcs_bucket}/{gcs_key}.tif"
+            run.gee_task_ids           = json.dumps({"raster": gee_task_id})
+            run.class_distribution     = json.dumps(current_dist)
+            run.baseline_distribution  = json.dumps(baseline_dist)
+            run.dw_tile_url            = urls.get("dw_label")
+            run.before_tile_url        = urls.get("before_s2")
+            run.after_tile_url         = urls.get("after_s2")
+            run.tile_expires_at        = tile_expires
             aoi_id = run.aoi_id
 
         # ── Vectors + alerts ─────────────────────────────────────────────────

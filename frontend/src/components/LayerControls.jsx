@@ -21,12 +21,67 @@ const ROW = {
 }
 const HR = { border: 'none', borderTop: '1px solid #E5E7EB', margin: '8px 0' }
 
-export default function LayerControls({ layers, onChange, hasTiles }) {
-  /* Hidden until a run has completed and tiles exist */
-  if (!hasTiles) return null
+const DW_LEGEND = [
+  ['#397d49','Trees / Forest'],
+  ['#88b053','Grassland'],
+  ['#e49635','Crops'],
+  ['#c4281b','Built-up'],
+  ['#a59b8f','Bare Soil'],
+  ['#419bdf','Water'],
+]
+
+const CHANGE_LEGEND = [
+  ['#B91C1C','Deforestation'],
+  ['#C2410C','Encroachment'],
+  ['#A16207','Agri. Encroachment'],
+  ['#6D28D9','Tree → Bare'],
+]
+
+function LegendRows({ items }) {
+  return items.map(([color, label]) => (
+    <div key={label} style={{ display:'flex', alignItems:'center', gap:'6px',
+                              fontSize:'11px', color:'#4B5563', marginBottom:'3px' }}>
+      <span style={{ width:10, height:10, background:color,
+                     display:'inline-block', borderRadius:2, flexShrink:0 }} />
+      {label}
+    </div>
+  ))
+}
+
+export default function LayerControls({ layers, onChange, hasTiles, hasPreview }) {
+  /* Nothing to control until either a preview or a full run exists */
+  if (!hasTiles && !hasPreview) return null
 
   const set = patch => onChange(prev => ({ ...prev, ...patch }))
 
+  /* ── Simplified panel: preview only, no detection run yet ──────── */
+  if (!hasTiles && hasPreview) {
+    return (
+      <div style={PANEL}>
+        <div style={HEAD}>Land Cover Preview</div>
+        <div style={BODY}>
+          <label style={ROW}>
+            <input
+              type="checkbox" checked={layers.dw ?? true}
+              onChange={e => set({ dw: e.target.checked })}
+              style={{ accentColor: '#1A3C6E' }}
+            />
+            Show DW Classification
+          </label>
+          <hr style={HR} />
+          <span style={SUBLABEL}>DW Class Legend</span>
+          <LegendRows items={DW_LEGEND} />
+          <hr style={HR} />
+          <p style={{ fontSize: 10, color: '#9CA3AF', lineHeight: 1.5, margin: 0 }}>
+            Quick preview — last 30 days. Run detection for change polygons
+            and before/after imagery.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  /* ── Full panel: detection run completed ────────────────────────── */
   return (
     <div style={PANEL}>
       <div style={HEAD}>Layer Controls</div>
@@ -78,21 +133,7 @@ export default function LayerControls({ layers, onChange, hasTiles }) {
           <>
             <hr style={HR} />
             <span style={{ ...SUBLABEL, marginBottom: '5px' }}>DW Class Legend</span>
-            {[
-              ['#397d49','Trees / Forest'],
-              ['#88b053','Grassland'],
-              ['#e49635','Crops'],
-              ['#c4281b','Built-up'],
-              ['#a59b8f','Bare Soil'],
-              ['#419bdf','Water'],
-            ].map(([color, label]) => (
-              <div key={label} style={{ display:'flex', alignItems:'center', gap:'6px',
-                                        fontSize:'11px', color:'#4B5563', marginBottom:'3px' }}>
-                <span style={{ width:10, height:10, background:color,
-                               display:'inline-block', borderRadius:2, flexShrink:0 }} />
-                {label}
-              </div>
-            ))}
+            <LegendRows items={DW_LEGEND} />
           </>
         )}
 
@@ -101,19 +142,7 @@ export default function LayerControls({ layers, onChange, hasTiles }) {
           <>
             <hr style={HR} />
             <span style={{ ...SUBLABEL, marginBottom: '5px' }}>Change Types</span>
-            {[
-              ['#B91C1C','Deforestation'],
-              ['#C2410C','Encroachment'],
-              ['#A16207','Agri. Encroachment'],
-              ['#6D28D9','Tree → Bare'],
-            ].map(([color, label]) => (
-              <div key={label} style={{ display:'flex', alignItems:'center', gap:'6px',
-                                        fontSize:'11px', color:'#4B5563', marginBottom:'3px' }}>
-                <span style={{ width:10, height:10, background:color,
-                               display:'inline-block', borderRadius:2, flexShrink:0 }} />
-                {label}
-              </div>
-            ))}
+            <LegendRows items={CHANGE_LEGEND} />
           </>
         )}
 

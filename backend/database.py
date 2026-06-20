@@ -69,10 +69,13 @@ class ChangeRun(Base):
     # GCS path to COG GeoTIFF raster
     raster_path       = Column(String)
     # GEE tile URLs (expire ~2 h; refreshed on demand)
-    dw_tile_url       = Column(Text)
-    before_tile_url   = Column(Text)
-    after_tile_url    = Column(Text)
-    tile_expires_at   = Column(DateTime)
+    dw_tile_url            = Column(Text)
+    before_tile_url        = Column(Text)
+    after_tile_url         = Column(Text)
+    tile_expires_at        = Column(DateTime)
+    # Land cover class breakdown (JSON: {class_name: area_ha})
+    class_distribution     = Column(Text)   # current period
+    baseline_distribution  = Column(Text)   # baseline period
 
 
 class Alert(Base):

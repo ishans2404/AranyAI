@@ -10,7 +10,7 @@ function whenReady(map, fn) {
   else map.once('load', fn)
 }
 
-export default function Map({ aoi, tiles, vectors, layers }) {
+export default function Map({ aoi, tiles, preview, vectors, layers }) {
   const containerRef = useRef(null)
   const mapRef       = useRef(null)
 
@@ -61,7 +61,29 @@ export default function Map({ aoi, tiles, vectors, layers }) {
     })
   }, [aoi])
 
-  /* ── GEE raster tile layers ────────────────────────────────────── */
+  /* ── Preview layer (shown before a full detection run completes) ─ */
+  /* Quick land-cover snapshot from GET /api/aois/{id}/preview.       */
+  /* Removed once full detection `tiles` arrive — see effect below.  */
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    whenReady(map, () => {
+      const id  = 'preview-dw'
+      const url = preview?.dw_tile_url
+
+      if (map.getLayer(id))  map.removeLayer(id)
+      if (map.getSource(id)) map.removeSource(id)
+      if (!url || tiles) return   // don't show preview once real results exist
+
+      map.addSource(id, { type: 'raster', tiles: [url], tileSize: 256 })
+      map.addLayer({
+        id, type: 'raster', source: id,
+        paint: { 'raster-opacity': layers?.dw ?? true ? 0.55 : 0 },
+      }, map.getLayer('aoi-line') ? 'aoi-line' : undefined)
+    })
+  }, [preview, tiles])
+
+  /* ── GEE raster tile layers (full detection results) ────────────── */
   useEffect(() => {
     const map = mapRef.current
     if (!map || !tiles) return
@@ -79,6 +101,10 @@ export default function Map({ aoi, tiles, vectors, layers }) {
     }
 
     whenReady(map, () => {
+      // Remove the preview layer now that real results have arrived
+      if (map.getLayer('preview-dw'))  map.removeLayer('preview-dw')
+      if (map.getSource('preview-dw')) map.removeSource('preview-dw')
+
       addRaster('dw-label',  tiles.dw_label,  0.70)
       addRaster('s2-before', tiles.before_s2, 0)   // hidden; toggled via layers prop
       addRaster('s2-after',  tiles.after_s2,  0)   // hidden; toggled via layers prop
@@ -134,7 +160,8 @@ export default function Map({ aoi, tiles, vectors, layers }) {
     const setOp  = (id, v) => { if (map.getLayer(id)) map.setPaintProperty(id,  'raster-opacity', v) }
     const setVis = (id, v) => { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v ? 'visible' : 'none') }
 
-    setOp('dw-label',      layers.dw      ? 0.70 : 0)
+    setOp('dw-label',   layers.dw ? 0.70 : 0)
+    setOp('preview-dw', layers.dw ? 0.55 : 0)
     setVis('changes-fill', layers.changes ?? true)
     setVis('changes-line', layers.changes ?? true)
 

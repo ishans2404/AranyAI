@@ -37,6 +37,7 @@ export const api = {
   listAois:         ()              => req('GET',   '/api/aois'),
   getAoi:           (id)            => req('GET',   `/api/aois/${id}`),
   createAoi:        (body)          => req('POST',  '/api/aois', body),
+  previewAoi:       (id, days)      => req('GET',   `/api/aois/${id}/preview${days ? `?days=${days}` : ''}`),
 
   // Detection
   triggerDetect:    (aoiId, body)   => req('POST',  `/api/aois/${aoiId}/detect`, body),
