@@ -1,7 +1,11 @@
 const PANEL = {
   position: 'absolute', bottom: '36px', left: '12px', zIndex: 100,
   background: '#FFFFFF', border: '1px solid #D1D5DB',
-  borderRadius: '4px', boxShadow: '0 2px 8px rgba(0,0,0,.10)',
+  // Level-2 elevation — matches var(--shadow-md) in index.css.
+  // Kept as a literal here since this panel uses inline styles, not a
+  // CSS class; see AranyAI_DESIGN_SYSTEM.md §6 for the elevation scale.
+  borderRadius: '4px',
+  boxShadow: '0 4px 6px rgba(0,0,0,.06), 0 2px 4px rgba(0,0,0,.06)',
   width: '210px', overflow: 'hidden', fontFamily: "'Inter','Noto Sans',system-ui,sans-serif",
 }
 const HEAD = {

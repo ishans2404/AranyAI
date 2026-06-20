@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .config import settings
-from .database import Alert, AOI, Base, ChangeRun, ChangeVector, engine, get_session
+from .database import Alert, AOI, Base, ChangeRun, ChangeVector, RangerAssignment, engine, get_session
 from .gee_runner import (
     _class_distribution, _composite, _init, annual_windows, DW_PALETTE,
     get_tile_urls, nrt_windows, run_gee_detection,
@@ -69,6 +69,11 @@ class AlertUpdate(BaseModel):
     status:      Optional[Literal["open", "assigned", "resolved", "dismissed"]] = None
     assigned_to: Optional[str] = None
     notes:       Optional[str] = None
+
+
+class RangerAssignCreate(BaseModel):
+    ranger_name: str
+    aoi_id:      str
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -169,6 +174,41 @@ def preview_aoi(aoi_id: str, days: int = 30):
         "dw_tile_url":        tile_url,
         "aoi_geojson":        geojson,
     }
+
+
+# ── Ranger routes (lightweight POC role model — see RangerAssignment) ────────
+
+@app.get("/api/rangers")
+def list_rangers():
+    """
+    Distinct rangers with their assigned AOI ids. Powers the Admin/Ranger
+    view switcher and scopes which AOIs a ranger view can select.
+    NOT authentication — there is no login behind ranger_name.
+    """
+    with get_session() as db:
+        rows = db.query(RangerAssignment).all()
+        out: dict[str, list[str]] = {}
+        for r in rows:
+            out.setdefault(r.ranger_name, []).append(r.aoi_id)
+        return [{"name": name, "aoi_ids": ids} for name, ids in out.items()]
+
+
+@app.post("/api/rangers/assign", status_code=201)
+def assign_ranger(body: RangerAssignCreate):
+    """Assign an AOI to a ranger (admin action). Idempotent."""
+    with get_session() as db:
+        exists = (
+            db.query(RangerAssignment)
+            .filter(
+                RangerAssignment.ranger_name == body.ranger_name,
+                RangerAssignment.aoi_id == body.aoi_id,
+            )
+            .first()
+        )
+        if exists:
+            return {"status": "already_assigned"}
+        db.add(RangerAssignment(ranger_name=body.ranger_name, aoi_id=body.aoi_id))
+    return {"status": "assigned"}
 
 
 # ── Detection routes ──────────────────────────────────────────────────────────
@@ -381,19 +421,22 @@ def get_run_vectors(run_id: str):
 
 @app.get("/api/alerts")
 def list_alerts(
-    status:   Optional[str] = None,
-    severity: Optional[str] = None,
-    aoi_id:   Optional[str] = None,
-    limit:    int = Query(50, le=200),
+    status:      Optional[str] = None,
+    severity:    Optional[str] = None,
+    aoi_id:      Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    limit:       int = Query(50, le=200),
 ):
     """
     List alerts. Filter with ?status=open&severity=high&aoi_id=...
+    Use ?assigned_to=ranger_name for a ranger-scoped view.
     """
     with get_session() as db:
         q = db.query(Alert)
-        if status:   q = q.filter(Alert.status   == status)
-        if severity: q = q.filter(Alert.severity == severity)
-        if aoi_id:   q = q.filter(Alert.aoi_id   == aoi_id)
+        if status:      q = q.filter(Alert.status      == status)
+        if severity:    q = q.filter(Alert.severity    == severity)
+        if aoi_id:       q = q.filter(Alert.aoi_id      == aoi_id)
+        if assigned_to:  q = q.filter(Alert.assigned_to == assigned_to)
         alerts = q.order_by(Alert.created_at.desc()).limit(limit).all()
 
         return [

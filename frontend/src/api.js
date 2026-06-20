@@ -54,4 +54,10 @@ export const api = {
     return req('GET', `/api/alerts${q ? `?${q}` : ''}`)
   },
   updateAlert:      (id, body)      => req('PATCH', `/api/alerts/${id}`, body),
+
+  // Rangers — lightweight role/assignment model for the POC.
+  // Real authentication (login, sessions, per-user permissions) is a
+  // follow-up hardening phase; this only scopes which AOIs a view sees.
+  listRangers:      ()              => req('GET',   '/api/rangers'),
+  assignRanger:     (body)          => req('POST',  '/api/rangers/assign', body),
 }

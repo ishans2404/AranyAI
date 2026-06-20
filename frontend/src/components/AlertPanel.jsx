@@ -298,7 +298,7 @@ function ChangeStats({ activeRun }) {
 
 /* ── Alert Table ──────────────────────────────────────────────────────────── */
 
-function AlertTable({ alerts, onAlertUpdate }) {
+function AlertTable({ alerts, onAlertUpdate, rangers = [] }) {
   const open = alerts.filter(a => a.status === 'open')
   return (
     <div className="panel-section">
@@ -355,17 +355,36 @@ function AlertTable({ alerts, onAlertUpdate }) {
                 <td>
                   {alert.status === 'open' ? (
                     <div className="td-actions">
-                      <button
-                        className="btn btn-xs btn-secondary"
-                        onClick={() => onAlertUpdate(alert.id, { status: 'assigned' })}
-                      >Assign</button>
+                      {rangers.length > 0 ? (
+                        <select
+                          className="form-select"
+                          style={{ fontSize: 11, padding: '3px 6px', width: 110 }}
+                          defaultValue=""
+                          onChange={e => {
+                            if (!e.target.value) return
+                            onAlertUpdate(alert.id, { status: 'assigned', assigned_to: e.target.value })
+                          }}
+                        >
+                          <option value="" disabled>Assign to…</option>
+                          {rangers.map(r => (
+                            <option key={r.name} value={r.name}>{r.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          className="btn btn-xs btn-secondary"
+                          onClick={() => onAlertUpdate(alert.id, { status: 'assigned' })}
+                        >Assign</button>
+                      )}
                       <button
                         className="btn btn-xs btn-danger"
                         onClick={() => onAlertUpdate(alert.id, { status: 'resolved' })}
                       >Resolve</button>
                     </div>
                   ) : (
-                    <span className={`badge badge-${alert.status}`}>{alert.status}</span>
+                    <span className={`badge badge-${alert.status}`}>
+                      {alert.status === 'assigned' && alert.assigned_to ? alert.assigned_to : alert.status}
+                    </span>
                   )}
                 </td>
               </tr>
@@ -435,7 +454,7 @@ export default function AlertPanel({
   aois, selectedAoiId, selectedAoi, onSelectAoi,
   preview, previewLoading,
   activeRun, polling, onDetect,
-  alerts, runHistory, onAlertUpdate,
+  alerts, rangers = [], runHistory, onAlertUpdate,
 }) {
   // Prefer the detection run's distribution once one exists (it reflects
   // the actual NRT window just analysed); fall back to the fast preview
@@ -524,7 +543,7 @@ export default function AlertPanel({
       {landCoverProps && <LandCoverProfile {...landCoverProps} />}
 
       {/* ── Active Alerts ─────────────────────────────────────────────── */}
-      <AlertTable alerts={alerts} onAlertUpdate={onAlertUpdate} />
+      <AlertTable alerts={alerts} onAlertUpdate={onAlertUpdate} rangers={rangers} />
 
       {/* ── Detection History ──────────────────────────────────────────── */}
       <RunHistory runHistory={runHistory} />

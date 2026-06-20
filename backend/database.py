@@ -107,3 +107,19 @@ class ChangeVector(Base):
     change_type = Column(String, nullable=False)
     geojson     = Column(Text, nullable=False)   # GeoJSON FeatureCollection string
     created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+class RangerAssignment(Base):
+    """
+    Which AOIs a named ranger can see. This is a lightweight POC role
+    model, NOT authentication — there is no login or session tied to
+    ranger_name, anyone can pick any view in the UI. It exists only to
+    demonstrate the admin/ranger dashboard split. Replace with a real
+    users table + auth (login, sessions, server-enforced permissions)
+    before any non-demo deployment.
+    """
+    __tablename__ = "ranger_assignments"
+    id          = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    ranger_name = Column(String, nullable=False)
+    aoi_id      = Column(String, nullable=False)
+    created_at  = Column(DateTime, default=datetime.utcnow)

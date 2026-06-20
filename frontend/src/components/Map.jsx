@@ -31,6 +31,9 @@ export default function Map({ aoi, tiles, preview, vectors, layers }) {
   }, [])
 
   /* ── AOI boundary ──────────────────────────────────────────────── */
+  /* Always re-fit the map to the new AOI, even when the source already */
+  /* exists from a previous selection — previously this returned early  */
+  /* on every AOI switch after the first and silently skipped fitBounds. */
   useEffect(() => {
     const map = mapRef.current
     if (!map || !aoi) return
@@ -38,18 +41,18 @@ export default function Map({ aoi, tiles, preview, vectors, layers }) {
       const data = { type: 'Feature', geometry: aoi }
       if (map.getSource('aoi')) {
         map.getSource('aoi').setData(data)
-        return
+      } else {
+        map.addSource('aoi', { type: 'geojson', data })
+        map.addLayer({
+          id: 'aoi-fill', type: 'fill', source: 'aoi',
+          paint: { 'fill-color': '#1A3C6E', 'fill-opacity': 0.06 },
+        })
+        map.addLayer({
+          id: 'aoi-line', type: 'line', source: 'aoi',
+          paint: { 'line-color': '#2563A8', 'line-width': 2, 'line-dasharray': [4, 2] },
+        })
       }
-      map.addSource('aoi', { type: 'geojson', data })
-      map.addLayer({
-        id: 'aoi-fill', type: 'fill', source: 'aoi',
-        paint: { 'fill-color': '#1A3C6E', 'fill-opacity': 0.06 },
-      })
-      map.addLayer({
-        id: 'aoi-line', type: 'line', source: 'aoi',
-        paint: { 'line-color': '#2563A8', 'line-width': 2, 'line-dasharray': [4, 2] },
-      })
-      /* Fly to AOI */
+      /* Fly to AOI — runs on every change, not just the first */
       const coords = aoi.type === 'Polygon'
         ? aoi.coordinates[0]
         : aoi.coordinates[0][0]
@@ -86,24 +89,36 @@ export default function Map({ aoi, tiles, preview, vectors, layers }) {
   /* ── GEE raster tile layers (full detection results) ────────────── */
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !tiles) return
+    if (!map) return
 
-    const addRaster = (id, url, opacity) => {
-      if (!url) return
-      if (map.getLayer(id)) map.removeLayer(id)
+    const removeRaster = id => {
+      if (map.getLayer(id))  map.removeLayer(id)
       if (map.getSource(id)) map.removeSource(id)
-      map.addSource(id, { type: 'raster', tiles: [url], tileSize: 256 })
-      // Insert below AOI boundary so the boundary stays on top
-      map.addLayer(
-        { id, type: 'raster', source: id, paint: { 'raster-opacity': opacity } },
-        map.getLayer('aoi-line') ? 'aoi-line' : undefined
-      )
     }
 
     whenReady(map, () => {
+      if (!tiles) {
+        // AOI switched away from the run these tiles belonged to —
+        // remove them so the previous AOI's imagery doesn't linger.
+        removeRaster('dw-label')
+        removeRaster('s2-before')
+        removeRaster('s2-after')
+        return
+      }
+
+      const addRaster = (id, url, opacity) => {
+        if (!url) return
+        removeRaster(id)
+        map.addSource(id, { type: 'raster', tiles: [url], tileSize: 256 })
+        // Insert below AOI boundary so the boundary stays on top
+        map.addLayer(
+          { id, type: 'raster', source: id, paint: { 'raster-opacity': opacity } },
+          map.getLayer('aoi-line') ? 'aoi-line' : undefined
+        )
+      }
+
       // Remove the preview layer now that real results have arrived
-      if (map.getLayer('preview-dw'))  map.removeLayer('preview-dw')
-      if (map.getSource('preview-dw')) map.removeSource('preview-dw')
+      removeRaster('preview-dw')
 
       addRaster('dw-label',  tiles.dw_label,  0.70)
       addRaster('s2-before', tiles.before_s2, 0)   // hidden; toggled via layers prop
@@ -114,8 +129,14 @@ export default function Map({ aoi, tiles, preview, vectors, layers }) {
   /* ── Change-detection polygon vectors ─────────────────────────── */
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !vectors) return
+    if (!map) return
     whenReady(map, () => {
+      if (!vectors) {
+        if (map.getLayer('changes-fill')) map.removeLayer('changes-fill')
+        if (map.getLayer('changes-line')) map.removeLayer('changes-line')
+        if (map.getSource('changes'))     map.removeSource('changes')
+        return
+      }
       if (map.getSource('changes')) {
         map.getSource('changes').setData(vectors)
         return

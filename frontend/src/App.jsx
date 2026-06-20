@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Map from './components/Map'
 import AlertPanel from './components/AlertPanel'
 import LayerControls from './components/LayerControls'
+import RoleSwitcher from './components/RoleSwitcher'
 import { api, nrtWindows } from './api'
 
 export default function App() {
   const [aois,          setAois]          = useState([])
+  const [rangers,       setRangers]       = useState([])    // [{name, aoi_ids}]
+  const [viewMode,      setViewMode]      = useState('admin') // 'admin' | ranger name
   const [selectedAoiId, setSelectedAoiId] = useState(null)
   const [selectedAoi,   setSelectedAoi]   = useState(null)   // full record with geojson
   const [preview,       setPreview]       = useState(null)   // quick land-cover snapshot
@@ -22,7 +25,21 @@ export default function App() {
     imagery: 'satellite',   // 'satellite' | 'before' | 'after'
   })
 
-  /* ── Load AOI list on mount ─────────────────────────────────────── */
+  // Ref mirrors the in-flight run id so the polling interval's closure
+  // always reads the latest value, even if React batches/replaces state
+  // in ways that would otherwise leave an old closure stale. This is the
+  // single source of truth for "what run am I polling" — fixes the
+  // GET /api/runs/undefined loop that happened when activeRun lost its
+  // run_id mapping.
+  const pollRunIdRef = useRef(null)
+
+  // AOIs visible in the current view — admin sees all, a ranger view
+  // sees only AOIs assigned to that ranger via /api/rangers.
+  const visibleAois = viewMode === 'admin'
+    ? aois
+    : aois.filter(a => rangers.find(r => r.name === viewMode)?.aoi_ids.includes(a.id))
+
+  /* ── Load AOI list + rangers on mount ───────────────────────────── */
   useEffect(() => {
     api.listAois()
       .then(data => {
@@ -30,12 +47,27 @@ export default function App() {
         if (data.length > 0) setSelectedAoiId(data[0].id)
       })
       .catch(err => console.error('AOI load:', err))
+
+    api.listRangers()
+      .then(setRangers)
+      .catch(err => console.error('Ranger load:', err))
   }, [])
+
+  /* ── Keep selected AOI valid when switching views ───────────────── */
+  useEffect(() => {
+    if (visibleAois.length === 0) return
+    if (!visibleAois.some(a => a.id === selectedAoiId)) {
+      setSelectedAoiId(visibleAois[0].id)
+    }
+  }, [viewMode, rangers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Load AOI detail when selection changes ─────────────────────── */
   useEffect(() => {
     if (!selectedAoiId) return
     setTiles(null); setVectors(null); setActiveRun(null); setPreview(null)
+    pollRunIdRef.current = null
+    setPolling(false)
+
     Promise.all([
       api.getAoi(selectedAoiId),
       api.listAlerts({ aoi_id: selectedAoiId, status: 'open' }),
@@ -55,21 +87,26 @@ export default function App() {
   }, [selectedAoiId])
 
   /* ── Poll active run every 5 seconds ────────────────────────────── */
+  /* Reads pollRunIdRef.current at call time (not a stale closure), so   */
+  /* it always polls the run actually in flight, never "undefined".     */
   useEffect(() => {
-    if (!polling || !activeRun) return
+    if (!polling) return
+
     const poll = async () => {
+      const runId = pollRunIdRef.current
+      if (!runId) return   // nothing in flight — guard, never request /undefined
+
       try {
-        const run = await api.getRun(activeRun.id)
+        const run = await api.getRun(runId)
         setActiveRun(run)
+
         if (['done', 'low_confidence'].includes(run.status)) {
           setPolling(false)
-          // run already contains class_distribution and baseline_distribution
-          // from GET /api/runs/{id} — update activeRun with the full record
-          setActiveRun(run)
+          pollRunIdRef.current = null
           const [tilesData, vectorsData, alertsData, historyData] = await Promise.all([
             api.getRunTiles(run.id),
             api.getRunVectors(run.id),
-            api.listAlerts({ aoi_id: selectedAoiId }),
+            api.listAlerts({ aoi_id: selectedAoiId, status: 'open' }),
             api.listRuns(selectedAoiId),
           ])
           setTiles(tilesData)
@@ -78,19 +115,24 @@ export default function App() {
           setRunHistory(historyData)
         } else if (run.status === 'failed') {
           setPolling(false)
+          pollRunIdRef.current = null
         }
-      } catch (err) { console.error('Poll error:', err) }
+      } catch (err) {
+        console.error('Poll error:', err)
+      }
     }
+
     const timer = setInterval(poll, 5000)
     return () => clearInterval(timer)
-  }, [polling, activeRun, selectedAoiId])
+  }, [polling, selectedAoiId])
 
   /* ── Trigger NRT detection ──────────────────────────────────────── */
   const handleDetect = useCallback(async () => {
     if (!selectedAoiId || polling) return
     try {
       const run = await api.triggerDetect(selectedAoiId, nrtWindows())
-      setActiveRun({ ...run, status: 'running' })
+      pollRunIdRef.current = run.run_id
+      setActiveRun({ id: run.run_id, status: 'running' })
       setPolling(true)
       setTiles(null); setVectors(null)
     } catch (err) {
@@ -98,11 +140,11 @@ export default function App() {
     }
   }, [selectedAoiId, polling])
 
-  /* ── Update alert status ────────────────────────────────────────── */
+  /* ── Update alert status / assign to a ranger ───────────────────── */
   const handleAlertUpdate = useCallback(async (alertId, updates) => {
     try {
       await api.updateAlert(alertId, updates)
-      const updated = await api.listAlerts({ aoi_id: selectedAoiId })
+      const updated = await api.listAlerts({ aoi_id: selectedAoiId, status: 'open' })
       setAlerts(updated)
     } catch (err) { console.error('Alert update:', err) }
   }, [selectedAoiId])
@@ -120,6 +162,7 @@ export default function App() {
           </div>
         </div>
         <div className="header-right">
+          <RoleSwitcher rangers={rangers} viewMode={viewMode} onChange={setViewMode} />
           <div className="header-dept">
             <strong>Chhattisgarh Forest Department</strong>
             Government of Chhattisgarh, India
@@ -134,7 +177,7 @@ export default function App() {
           <span>Home</span><span className="sep">›</span>
           <span>Forest Monitoring</span><span className="sep">›</span>
           <span style={{ color: 'var(--navy-700)', fontWeight: 500 }}>
-            NRT Change Detection Dashboard
+            {viewMode === 'admin' ? 'NRT Change Detection Dashboard' : `Ranger Dashboard — ${viewMode}`}
           </span>
         </div>
         <div className="system-status">
@@ -166,7 +209,7 @@ export default function App() {
         {/* Data panel */}
         <div className="side-panel">
           <AlertPanel
-            aois={aois}
+            aois={visibleAois}
             selectedAoiId={selectedAoiId}
             selectedAoi={selectedAoi}
             onSelectAoi={setSelectedAoiId}
@@ -176,6 +219,7 @@ export default function App() {
             polling={polling}
             onDetect={handleDetect}
             alerts={alerts}
+            rangers={viewMode === 'admin' ? rangers : []}
             runHistory={runHistory}
             onAlertUpdate={handleAlertUpdate}
           />
