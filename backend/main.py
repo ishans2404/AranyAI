@@ -148,7 +148,7 @@ def preview_aoi(aoi_id: str, days: int = 30):
     end   = datetime.utcnow().date()
     start = end - timedelta(days=days)
 
-    label, _, count = _composite(aoi, str(start), str(end))
+    label, _, _, count = _composite(aoi, str(start), str(end))
     if count == 0:
         return {
             "image_count":  0,
@@ -358,7 +358,7 @@ def get_run_tiles(run_id: str, refresh: bool = False):
     # Regenerate tile URLs (they expired)
     _init()
     aoi = ee.Geometry(aoi_geojson)
-    c_label, _, _ = _composite(aoi, str(run.current_start), str(run.current_end))
+    c_label, _, _, _ = _composite(aoi, str(run.current_start), str(run.current_end))
     urls = get_tile_urls(aoi, baseline_end, current_end, c_label)
 
     expires = datetime.utcnow() + timedelta(hours=2)

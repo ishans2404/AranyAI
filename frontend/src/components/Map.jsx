@@ -27,7 +27,17 @@ export default function Map({ aoi, tiles, preview, vectors, layers }) {
     map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-right')
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right')
     mapRef.current = map
-    return () => { map.remove(); mapRef.current = null }
+
+    // Mapbox GL freezes its internal canvas size at construction time and
+    // never re-measures on its own. Our layout is flexbox-driven (header
+    // height, side-panel width, responsive breakpoints), so the container
+    // can resize AFTER the map is created — without this, the canvas stays
+    // whatever size it was at the first paint and the rest of the
+    // .map-pane div renders as blank white space below/beside it.
+    const ro = new ResizeObserver(() => map.resize())
+    ro.observe(containerRef.current)
+
+    return () => { ro.disconnect(); map.remove(); mapRef.current = null }
   }, [])
 
   /* ── AOI boundary ──────────────────────────────────────────────── */

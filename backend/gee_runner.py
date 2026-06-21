@@ -108,7 +108,25 @@ def annual_windows(start_month: int = 1, end_month: int = 5) -> dict:
 def _composite(aoi, start: str, end: str):
     """
     Mean-probability composite → argMax label.
-    Returns (label_image, raw_collection, image_count).
+
+    No per-image confidence pre-masking. Dynamic World's own catalog notes
+    that top-1 probability can be legitimately low for ambiguous surfaces
+    (mixed crops, bare/arid ground, sparse built-up) — masking those pixels
+    out before averaging means any pixel that never crosses the threshold
+    in ANY image of the window ends up with no label at all. On the map
+    this renders as visible holes in the classification; in area stats it
+    silently drops real hectares (a Jharsuguda run showed 474 ha of 807 ha
+    total — the other ~333 ha were masked out entirely, not "no data").
+
+    Temporal averaging across every image in the window is the noise
+    reduction mechanism — multiple images already smooth out single-scene
+    artifacts (cloud shadow, BRDF, sun-glint). Every pixel always gets a
+    best-guess label; downstream change-detection masks apply a *soft*
+    confidence floor instead (see CHANGE_CONF_FLOOR in run_gee_detection),
+    so noisy pixels are excluded from alerts/area-stats without ever
+    creating a gap in what's actually displayed on the map.
+
+    Returns (label_image, mean_probs_image, raw_collection, image_count).
     """
     dw = (
         ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
@@ -117,19 +135,14 @@ def _composite(aoi, start: str, end: str):
     )
     count = dw.size().getInfo()
 
-    def mask_low(img):
-        return img.updateMask(
-            img.select(CLASS_NAMES).reduce(ee.Reducer.max()).gt(0.5)
-        )
-
-    mean  = dw.map(mask_low).select(CLASS_NAMES).mean()
-    # IMPORTANT: ee.Image has arrayArgmax(), NOT argmax() — confirmed against
-    # eedocs.txt method list for ee.Image. toArray() converts the 9 probability
-    # bands into a per-pixel array; arrayArgmax() returns a 1-element array
-    # holding the index of the highest-probability class; arrayGet([0])
-    # extracts that scalar index as the label value.
-    label = mean.toArray().arrayArgmax().arrayGet([0]).rename("label").toUint8()
-    return label, dw, count
+    mean_probs = dw.select(CLASS_NAMES).mean()
+    # ee.Image has arrayArgmax(), NOT argmax() — confirmed against eedocs.txt
+    # method list for ee.Image. toArray() converts the 9 probability bands
+    # into a per-pixel array; arrayArgmax() returns a 1-element array holding
+    # the index of the highest-probability class; arrayGet([0]) extracts
+    # that scalar index as the label value.
+    label = mean_probs.toArray().arrayArgmax().arrayGet([0]).rename("label").toUint8()
+    return label, mean_probs, dw, count
 
 
 def _area_ha(mask, aoi) -> float:
@@ -150,9 +163,9 @@ def _severity(change_type: str, area_ha: float):
     return None
 
 
-def _confidence(aoi, collection, change_mask) -> float:
-    """Mean top-class DW probability for changed pixels."""
-    top = collection.select(CLASS_NAMES).mean().reduce(ee.Reducer.max())
+def _confidence(aoi, mean_probs, change_mask) -> float:
+    """Mean top-class DW probability for changed pixels, given a mean_probs image."""
+    top = mean_probs.reduce(ee.Reducer.max())
     r = (
         top.updateMask(change_mask)
         .reduceRegion(ee.Reducer.mean(), aoi, 100, maxPixels=1e12, bestEffort=True)
@@ -340,8 +353,8 @@ def run_gee_detection(
 
     try:
         # ── Composites ───────────────────────────────────────────────────────
-        b_label, _b_col, b_count = _composite(aoi, baseline_start, baseline_end)
-        c_label, c_col,  c_count = _composite(aoi, current_start,  current_end)
+        b_label, b_probs, _b_col, b_count = _composite(aoi, baseline_start, baseline_end)
+        c_label, c_probs, _c_col, c_count = _composite(aoi, current_start,  current_end)
         log.info("[%s] images baseline:%d current:%d", run_id[:8], b_count, c_count)
 
         if b_count == 0:
@@ -357,11 +370,28 @@ def run_gee_detection(
             run_status = "low_confidence"
 
         # ── Change masks ─────────────────────────────────────────────────────
+        # CHANGE_CONF_FLOOR: a *soft* quality gate applied only to the boolean
+        # change masks below — never to b_label/c_label themselves. This is
+        # the deliberate alternative to the old per-image pre-mask: the
+        # displayed classification always has full coverage (every pixel has
+        # a best-guess label), while a pixel only counts toward alert area /
+        # severity if the current period's top-1 probability at that pixel
+        # clears a modest bar. 0.35 is a starting calibration (9 DW classes
+        # → chance level ≈0.11), not a hard scientific constant — tune this
+        # against field-inspection feedback (confirmed vs. false-alarm
+        # alerts) the same way eNetra describes closing their feedback loop.
+        CHANGE_CONF_FLOOR = 0.35
+        current_confident = c_probs.reduce(ee.Reducer.max()).gte(CHANGE_CONF_FLOOR)
+
         trees = CLASS_IDX["trees"]
-        defor  = b_label.eq(trees).And(c_label.neq(trees)).And(c_label.neq(CLASS_IDX["water"]))
-        encr   = b_label.lte(CLASS_IDX["grass"]).And(c_label.eq(CLASS_IDX["built"]))
-        agri   = b_label.eq(trees).And(c_label.eq(CLASS_IDX["crops"]))
-        bare_m = b_label.eq(trees).And(c_label.eq(CLASS_IDX["bare"]))
+        defor  = (b_label.eq(trees).And(c_label.neq(trees)).And(c_label.neq(CLASS_IDX["water"]))
+                  .And(current_confident))
+        encr   = (b_label.lte(CLASS_IDX["grass"]).And(c_label.eq(CLASS_IDX["built"]))
+                  .And(current_confident))
+        agri   = (b_label.eq(trees).And(c_label.eq(CLASS_IDX["crops"]))
+                  .And(current_confident))
+        bare_m = (b_label.eq(trees).And(c_label.eq(CLASS_IDX["bare"]))
+                  .And(current_confident))
         any_ch = b_label.neq(c_label)
         trans  = b_label.multiply(9).add(c_label).rename("transition").toUint8()
 
@@ -458,7 +488,7 @@ def run_gee_detection(
                     current_end=current_end,
                     lookback_days=lookback,
                 )
-                conf = _confidence(aoi, c_col, mask)
+                conf = _confidence(aoi, c_probs, mask)
 
                 db.add(Alert(
                     id=str(uuid.uuid4()),
@@ -468,7 +498,7 @@ def run_gee_detection(
                     change_type=ctype,
                     severity=sev,
                     area_ha=area,
-                    first_detected_at=first_date,
+                    first_detected_at=datetime.strptime(first_date, "%Y-%m-%d").date() if first_date else None,
                     confidence=conf,
                 ))
 
