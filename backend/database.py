@@ -79,24 +79,74 @@ class ChangeRun(Base):
 
 
 class Alert(Base):
+    """
+    One officer-visible detection at a Site. Created/refreshed only once
+    a Site's persistence requirement is met (see gee_runner.PERSISTENCE_REQUIRED)
+    — a Site can exist for runs as a 'candidate' with no Alert at all.
+    """
     __tablename__ = "alerts"
     id               = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     aoi_id           = Column(String, nullable=False)
     run_id           = Column(String, nullable=False)
+    site_id          = Column(String)            # persistent location — see Site
     detection_mode   = Column(String)
     # deforestation | encroachment | agri_in_forest | tree_to_bare
     change_type      = Column(String, nullable=False)
     # low | medium | high | critical
     severity         = Column(String, nullable=False)
     area_ha          = Column(Float)
-    first_detected_at = Column(Date)   # from DW time-series scan
-    confidence       = Column(Float)   # mean DW top-class prob 0-1
-    # open | assigned | resolved | dismissed
+    first_detected_at = Column(Date)   # Site.first_detected_at at promotion time
+    # 0-100 anomaly-based confidence score (see gee_runner._compute_confidence).
+    # NOT a classifier probability — weighted from anomaly magnitude,
+    # persistence count, cluster size, and NDVI agreement.
+    confidence       = Column(Float)
+    anomaly_z_score      = Column(Float)   # raw z = (current - baseline_median) / baseline_stdDev
+    baseline_trees_prob  = Column(Float)
+    current_trees_prob   = Column(Float)
+    persistence_count    = Column(Integer, default=1)
+    # JSON: {timeseries, before_tile_url, after_tile_url, dw_tile_url, caption}
+    explainability_bundle = Column(Text)
+    # open | resolved | dismissed  (lifecycle stage — distinct from officer_outcome)
     status           = Column(String, default="open")
     assigned_to      = Column(String)
     notes            = Column(Text)
+    # Officer field-verification outcome — the feedback-loop hook.
+    # confirmed | false_alarm | needs_follow_up
+    officer_outcome  = Column(String)
+    # cloud_shadow | harvest | seasonal_flood | natural_fall | other (set when officer_outcome=false_alarm)
+    officer_reason   = Column(String)
+    verified_at      = Column(DateTime)
+    verified_by      = Column(String)
     created_at       = Column(DateTime, default=datetime.utcnow)
     resolved_at      = Column(DateTime)
+
+
+class Site(Base):
+    """
+    Persistent physical location for a detected anomaly. An Alert is the
+    officer-visible record at a Site once persistence is confirmed; the
+    Site itself tracks lifecycle state and accumulated officer-verification
+    precision across however many runs/alerts have touched this location.
+    """
+    __tablename__ = "sites"
+    id          = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    aoi_id      = Column(String, nullable=False)
+    # Latest classification — descriptive only, can shift between runs
+    # (e.g. cleared first, built on later) while remaining the same site.
+    change_type = Column(String, nullable=False)
+    geom_geojson = Column(Text, nullable=False)   # latest polygon estimate, GeoJSON Polygon, EPSG:4326
+    # candidate (detected once, not yet persistence-confirmed) |
+    # open (persistence-confirmed, visible to officers) |
+    # resolved | false_alarm (officer closed it out)
+    status      = Column(String, default="candidate")
+    persistence_count  = Column(Integer, default=1)
+    first_detected_at  = Column(DateTime, default=datetime.utcnow)
+    last_observed_at   = Column(DateTime, default=datetime.utcnow)
+    # Precision tracking — confirmed / total officer outcomes recorded.
+    # Surfaced as a per-AOI trust metric ("87% of checked alerts were real").
+    precision_confirmed = Column(Integer, default=0)
+    precision_total     = Column(Integer, default=0)
+    created_at  = Column(DateTime, default=datetime.utcnow)
 
 
 class ChangeVector(Base):

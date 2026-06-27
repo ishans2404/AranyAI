@@ -346,6 +346,130 @@ body {
 }
 @keyframes shimmer { 0%,100%{opacity:.7} 50%{opacity:1} }
 
+/* ══ Verification Queue (Open / Candidates / Resolved) ═══════════════
+   Tabs follow the same label scale (10px/700/uppercase) as every other
+   structural label in the system; active state is a 2px navy underline,
+   not a pill — borders communicate state here, not shape. ══════════ */
+
+.queue-tabs {
+  display: flex; border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+}
+.queue-tab {
+  flex: 1; padding: 9px 10px 8px; text-align: center;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--gray-500);
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; font-family: var(--font);
+}
+.queue-tab:hover { color: var(--navy-700); }
+.queue-tab.active {
+  color: var(--navy-800); border-bottom-color: var(--navy-800);
+  background: #fff;
+}
+.queue-tab .queue-tab-count { margin-left: 4px; color: var(--gray-400); font-weight: 600; }
+.queue-tab.active .queue-tab-count { color: var(--navy-600); }
+
+/* ══ Alert Card — same bordered/left-stripe pattern as .stat-card ═══ */
+
+.alert-card {
+  background: #fff; border: 1px solid var(--gray-200);
+  border-radius: var(--border-radius); border-left: 3px solid var(--gray-300);
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.alert-card.defor { border-left-color: var(--defor); }
+.alert-card.encr  { border-left-color: var(--encr); }
+.alert-card.agri  { border-left-color: var(--agri); }
+.alert-card.bare  { border-left-color: var(--bare); }
+.alert-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px; gap: 8px;
+}
+.alert-card-title {
+  font-size: 12px; font-weight: 600; color: var(--gray-900);
+  text-transform: capitalize; display: flex; align-items: center; gap: 6px;
+}
+.alert-card-meta {
+  display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 8px;
+  font-size: 11px; color: var(--gray-600);
+}
+.alert-card-meta .meta-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--gray-400); margin-right: 3px;
+}
+
+/* ══ Confidence Meter — navy fill, same track style as the land-cover bars ══ */
+
+.confidence-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 8px; }
+.confidence-track {
+  flex: 1; height: 6px; background: var(--gray-200);
+  border-radius: var(--border-radius); overflow: hidden;
+}
+.confidence-fill {
+  height: 100%; background: var(--navy-700); border-radius: var(--border-radius);
+  transition: width .4s ease;
+}
+.confidence-value {
+  font-size: 11px; font-weight: 700; color: var(--navy-800);
+  font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 38px; text-align: right;
+}
+
+/* ══ Persistence dots — reuses the 50%-radius status-dot convention ══ */
+
+.persistence-dots { display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; }
+.persistence-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gray-300); }
+.persistence-dot.filled { background: var(--navy-700); }
+
+/* ══ Explainability Bundle ═══════════════════════════════════════════ */
+
+.bundle { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--gray-100); }
+.bundle-caption { font-size: 11px; color: var(--gray-700); line-height: 1.5; margin-bottom: 8px; }
+.bundle-thumbs { display: flex; gap: 6px; margin-bottom: 8px; }
+.bundle-thumb-wrap { flex: 1; min-width: 0; }
+.bundle-thumb {
+  width: 100%; height: 72px; object-fit: cover;
+  border: 1px solid var(--gray-300); border-radius: var(--border-radius);
+  background: var(--gray-100); display: block;
+}
+.bundle-thumb-label {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--gray-400); margin-top: 3px; text-align: center;
+}
+.sparkline-wrap { margin-bottom: 8px; }
+
+/* ══ Outcome Picker — Confirmed reuses the existing status-green,
+   False Alarm reuses critical, Needs Follow-up reuses secondary ════ */
+
+.outcome-picker { display: flex; gap: 6px; margin-top: 8px; }
+.outcome-reason { margin-top: 6px; }
+.btn-success { background: #fff; color: var(--ok); border-color: #86EFAC; }
+.btn-success:hover:not(:disabled) { background: #F0FDF4; }
+.btn-success.active { background: #F0FDF4; }
+.btn-danger.active { background: var(--critical-bg); }
+.btn-secondary.active { background: var(--navy-50); border-color: var(--navy-100); color: var(--navy-700); }
+
+/* ══ Candidate row — forming sites, informational only ══════════════ */
+
+.candidate-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border: 1px solid var(--gray-200); border-radius: var(--border-radius);
+  margin-bottom: 6px; background: var(--gray-50);
+}
+.candidate-row .candidate-type { font-size: 11px; font-weight: 500; color: var(--gray-700); text-transform: capitalize; }
+.candidate-row .candidate-progress { font-size: 10px; color: var(--gray-500); font-family: 'Courier New', monospace; }
+
+/* ══ Precision pill — same bg/text/border triplet pattern as severity badges ══ */
+
+.precision-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 700;
+  letter-spacing: .5px; text-transform: uppercase; border: 1px solid;
+}
+.precision-pill.good    { background: #F0FDF4; color: var(--ok); border-color: #86EFAC; }
+.precision-pill.mixed   { background: var(--medium-bg); color: var(--medium-text); border-color: var(--medium-border); }
+.precision-pill.poor    { background: var(--critical-bg); color: var(--critical-text); border-color: var(--critical-border); }
+.precision-pill.unknown { background: var(--gray-100); color: var(--gray-500); border-color: var(--gray-300); }
+
 /* ══ Footer stripe ════════════════════════════════════════════════ */
 
 .app-footer {
@@ -405,4 +529,6 @@ body {
   }
   .brand-sub, .header-dept { display: none; }
   .app-subbar .system-status { display: none; }
+  .outcome-picker { flex-wrap: wrap; }
+  .outcome-picker .btn { flex: 1 1 calc(50% - 3px); }
 }

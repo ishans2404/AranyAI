@@ -10,7 +10,7 @@ function whenReady(map, fn) {
   else map.once('load', fn)
 }
 
-export default function Map({ aoi, tiles, preview, vectors, layers }) {
+export default function Map({ aoi, tiles, preview, vectors, sites, layers }) {
   const containerRef = useRef(null)
   const mapRef       = useRef(null)
 
@@ -183,6 +183,79 @@ export default function Map({ aoi, tiles, preview, vectors, layers }) {
     })
   }, [vectors])
 
+  /* ── Persistent alert/candidate sites — independent of any one run ─ */
+  /* Sites (GET /api/sites) persist across runs; unlike `vectors` above */
+  /* (one run's clusters) these show as soon as an AOI is picked, before */
+  /* any fresh detection completes. Colour communicates lifecycle stage, */
+  /* not severity: candidate=forming, open=needs review, resolved=closed.*/
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    whenReady(map, () => {
+      const STATUS_COLOR = {
+        candidate: '#9CA3AF', open: '#991B1B', resolved: '#15803D', false_alarm: '#D1D5DB',
+      }
+      if (!sites || sites.length === 0) {
+        if (map.getLayer('sites-fill')) map.removeLayer('sites-fill')
+        if (map.getLayer('sites-line')) map.removeLayer('sites-line')
+        if (map.getSource('sites'))     map.removeSource('sites')
+        return
+      }
+      const fc = {
+        type: 'FeatureCollection',
+        features: sites.map(s => ({
+          type: 'Feature',
+          geometry: s.geojson,
+          properties: {
+            id: s.id,
+            status: s.status,
+            change_type: s.change_type,
+            persistence_count: s.persistence_count,
+            color: STATUS_COLOR[s.status] || '#9CA3AF',
+          },
+        })),
+      }
+      if (map.getSource('sites')) {
+        map.getSource('sites').setData(fc)
+        return
+      }
+      map.addSource('sites', { type: 'geojson', data: fc })
+      map.addLayer({
+        id: 'sites-fill', type: 'fill', source: 'sites',
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.30 },
+      })
+      map.addLayer({
+        id: 'sites-line', type: 'line', source: 'sites',
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['match', ['get', 'status'], 'open', 2, 1.2],
+          'line-dasharray': ['match', ['get', 'status'], 'candidate', ['literal', [2, 2]], ['literal', [1, 0]]],
+        },
+      })
+
+      map.on('click', 'sites-fill', e => {
+        const p = e.features[0].properties
+        new mapboxgl.Popup({ closeButton: false, maxWidth: '220px' })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div style="font-family:'Inter',sans-serif;font-size:12px;padding:2px 0">
+              <strong style="color:#0F2B52;text-transform:capitalize">
+                ${(p.change_type || '').replace(/_/g, ' ')}
+              </strong><br/>
+              <span style="color:#6B7280">
+                ${p.status === 'candidate'
+                  ? `Forming · pass ${p.persistence_count}/2`
+                  : `Status: ${p.status} · ${p.persistence_count} pass(es)`}
+              </span>
+            </div>
+          `)
+          .addTo(map)
+      })
+      map.on('mouseenter', 'sites-fill', () => { map.getCanvas().style.cursor = 'pointer' })
+      map.on('mouseleave', 'sites-fill', () => { map.getCanvas().style.cursor = '' })
+    })
+  }, [sites])
+
   /* ── Layer visibility / opacity controlled by LayerControls ────── */
   useEffect(() => {
     const map = mapRef.current
@@ -195,6 +268,8 @@ export default function Map({ aoi, tiles, preview, vectors, layers }) {
     setOp('preview-dw', layers.dw ? 0.55 : 0)
     setVis('changes-fill', layers.changes ?? true)
     setVis('changes-line', layers.changes ?? true)
+    setVis('sites-fill', layers.sites ?? true)
+    setVis('sites-line', layers.sites ?? true)
 
     /* Imagery mode — toggle which S2 raster is shown */
     setOp('s2-before', layers.imagery === 'before' ? 0.95 : 0)

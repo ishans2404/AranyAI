@@ -16,18 +16,10 @@ async function req(method, path, body) {
   return res.json()
 }
 
-/** Compute NRT date windows relative to today (client-side). */
-export function nrtWindows(windowDays = 15) {
-  const today = new Date()
-  const sub   = (d, n) => { const r = new Date(d); r.setDate(r.getDate() - n); return r }
-  const fmt   = d => d.toISOString().split('T')[0]
-  return {
-    mode:           'nrt',
-    current_end:    fmt(today),
-    current_start:  fmt(sub(today, windowDays)),
-    baseline_end:   fmt(sub(today, windowDays)),
-    baseline_start: fmt(sub(today, windowDays * 2)),
-  }
+function toQuery(params = {}) {
+  return new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+  ).toString()
 }
 
 export const api = {
@@ -48,12 +40,18 @@ export const api = {
 
   // Alerts
   listAlerts:       (params = {})   => {
-    const q = new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
-    ).toString()
+    const q = toQuery(params)
     return req('GET', `/api/alerts${q ? `?${q}` : ''}`)
   },
   updateAlert:      (id, body)      => req('PATCH', `/api/alerts/${id}`, body),
+
+  // Sites — persistent candidate/open/resolved locations (see backend Site model)
+  listSites:        (params = {})   => {
+    const q = toQuery(params)
+    return req('GET', `/api/sites${q ? `?${q}` : ''}`)
+  },
+  getSite:          (id)            => req('GET', `/api/sites/${id}`),
+  getAoiPrecision:  (aoiId)         => req('GET', `/api/aois/${aoiId}/precision`),
 
   // Rangers — lightweight role/assignment model for the POC.
   // Real authentication (login, sessions, per-user permissions) is a

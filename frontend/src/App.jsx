@@ -3,7 +3,7 @@ import Map from './components/Map'
 import AlertPanel from './components/AlertPanel'
 import LayerControls from './components/LayerControls'
 import RoleSwitcher from './components/RoleSwitcher'
-import { api, nrtWindows } from './api'
+import { api } from './api'
 
 export default function App() {
   const [aois,          setAois]          = useState([])
@@ -17,11 +17,14 @@ export default function App() {
   const [tiles,         setTiles]         = useState(null)   // GEE tile URLs
   const [vectors,       setVectors]       = useState(null)   // change GeoJSON
   const [alerts,        setAlerts]        = useState([])
+  const [sites,         setSites]         = useState([])     // persistent candidate/open/resolved locations
+  const [precision,     setPrecision]     = useState(null)   // {confirmed, total, precision} for selected AOI
   const [runHistory,    setRunHistory]    = useState([])
   const [polling,       setPolling]       = useState(false)
   const [layers,        setLayers]        = useState({
     dw:      true,
     changes: true,
+    sites:   true,
     imagery: 'satellite',   // 'satellite' | 'before' | 'after'
   })
 
@@ -70,12 +73,16 @@ export default function App() {
 
     Promise.all([
       api.getAoi(selectedAoiId),
-      api.listAlerts({ aoi_id: selectedAoiId, status: 'open' }),
+      api.listAlerts({ aoi_id: selectedAoiId }),
+      api.listSites({ aoi_id: selectedAoiId }),
       api.listRuns(selectedAoiId),
-    ]).then(([aoiData, alertsData, runsData]) => {
+      api.getAoiPrecision(selectedAoiId),
+    ]).then(([aoiData, alertsData, sitesData, runsData, precisionData]) => {
       setSelectedAoi(aoiData)
       setAlerts(alertsData)
+      setSites(sitesData)
       setRunHistory(runsData)
+      setPrecision(precisionData)
     }).catch(err => console.error('AOI detail load:', err))
 
     // Fast land-cover preview — no export task, shows context immediately
@@ -103,16 +110,20 @@ export default function App() {
         if (['done', 'low_confidence'].includes(run.status)) {
           setPolling(false)
           pollRunIdRef.current = null
-          const [tilesData, vectorsData, alertsData, historyData] = await Promise.all([
+          const [tilesData, vectorsData, alertsData, sitesData, historyData, precisionData] = await Promise.all([
             api.getRunTiles(run.id),
             api.getRunVectors(run.id),
-            api.listAlerts({ aoi_id: selectedAoiId, status: 'open' }),
+            api.listAlerts({ aoi_id: selectedAoiId }),
+            api.listSites({ aoi_id: selectedAoiId }),
             api.listRuns(selectedAoiId),
+            api.getAoiPrecision(selectedAoiId),
           ])
           setTiles(tilesData)
           setVectors(vectorsData)
           setAlerts(alertsData)
+          setSites(sitesData)
           setRunHistory(historyData)
+          setPrecision(precisionData)
         } else if (run.status === 'failed') {
           setPolling(false)
           pollRunIdRef.current = null
@@ -130,7 +141,7 @@ export default function App() {
   const handleDetect = useCallback(async () => {
     if (!selectedAoiId || polling) return
     try {
-      const run = await api.triggerDetect(selectedAoiId, nrtWindows())
+      const run = await api.triggerDetect(selectedAoiId, { mode: 'nrt' })
       pollRunIdRef.current = run.run_id
       setActiveRun({ id: run.run_id, status: 'running' })
       setPolling(true)
@@ -140,12 +151,18 @@ export default function App() {
     }
   }, [selectedAoiId, polling])
 
-  /* ── Update alert status / assign to a ranger ───────────────────── */
+  /* ── Update alert status / record officer verification outcome ──── */
   const handleAlertUpdate = useCallback(async (alertId, updates) => {
     try {
       await api.updateAlert(alertId, updates)
-      const updated = await api.listAlerts({ aoi_id: selectedAoiId, status: 'open' })
-      setAlerts(updated)
+      const [updatedAlerts, updatedSites, updatedPrecision] = await Promise.all([
+        api.listAlerts({ aoi_id: selectedAoiId }),
+        api.listSites({ aoi_id: selectedAoiId }),
+        api.getAoiPrecision(selectedAoiId),
+      ])
+      setAlerts(updatedAlerts)
+      setSites(updatedSites)
+      setPrecision(updatedPrecision)
     } catch (err) { console.error('Alert update:', err) }
   }, [selectedAoiId])
 
@@ -196,6 +213,7 @@ export default function App() {
             tiles={tiles}
             preview={preview}
             vectors={vectors}
+            sites={sites}
             layers={layers}
           />
           <LayerControls
@@ -203,6 +221,7 @@ export default function App() {
             onChange={setLayers}
             hasTiles={!!tiles}
             hasPreview={!!preview?.dw_tile_url}
+            hasSites={sites.length > 0}
           />
         </div>
 
@@ -219,9 +238,12 @@ export default function App() {
             polling={polling}
             onDetect={handleDetect}
             alerts={alerts}
+            sites={sites}
+            precision={precision}
             rangers={viewMode === 'admin' ? rangers : []}
             runHistory={runHistory}
             onAlertUpdate={handleAlertUpdate}
+            currentViewer={viewMode}
           />
         </div>
       </div>

@@ -41,6 +41,12 @@ const CHANGE_LEGEND = [
   ['#6D28D9','Tree → Bare'],
 ]
 
+const SITE_LEGEND = [
+  ['#991B1B','Open alert — needs review'],
+  ['#9CA3AF','Candidate — forming'],
+  ['#15803D','Resolved'],
+]
+
 function LegendRows({ items }) {
   return items.map(([color, label]) => (
     <div key={label} style={{ display:'flex', alignItems:'center', gap:'6px',
@@ -52,9 +58,9 @@ function LegendRows({ items }) {
   ))
 }
 
-export default function LayerControls({ layers, onChange, hasTiles, hasPreview }) {
-  /* Nothing to control until either a preview or a full run exists */
-  if (!hasTiles && !hasPreview) return null
+export default function LayerControls({ layers, onChange, hasTiles, hasPreview, hasSites }) {
+  /* Nothing to control until either a preview, sites, or a full run exists */
+  if (!hasTiles && !hasPreview && !hasSites) return null
 
   const set = patch => onChange(prev => ({ ...prev, ...patch }))
 
@@ -72,9 +78,26 @@ export default function LayerControls({ layers, onChange, hasTiles, hasPreview }
             />
             Show DW Classification
           </label>
+          {hasSites && (
+            <label style={ROW}>
+              <input
+                type="checkbox" checked={layers.sites ?? true}
+                onChange={e => set({ sites: e.target.checked })}
+                style={{ accentColor: '#1A3C6E' }}
+              />
+              Show Alert Sites
+            </label>
+          )}
           <hr style={HR} />
           <span style={SUBLABEL}>DW Class Legend</span>
           <LegendRows items={DW_LEGEND} />
+          {hasSites && (
+            <>
+              <hr style={HR} />
+              <span style={SUBLABEL}>Site Status</span>
+              <LegendRows items={SITE_LEGEND} />
+            </>
+          )}
           <hr style={HR} />
           <p style={{ fontSize: 10, color: '#9CA3AF', lineHeight: 1.5, margin: 0 }}>
             Quick preview — last 30 days. Run detection for change polygons
@@ -132,6 +155,17 @@ export default function LayerControls({ layers, onChange, hasTiles, hasPreview }
           Change Polygons
         </label>
 
+        {hasSites && (
+          <label style={ROW}>
+            <input
+              type="checkbox" checked={layers.sites ?? true}
+              onChange={e => set({ sites: e.target.checked })}
+              style={{ accentColor: '#1A3C6E' }}
+            />
+            Alert Sites
+          </label>
+        )}
+
         {/* ── DW Legend ─────────────────────────────────────────── */}
         {layers.dw && (
           <>
@@ -147,6 +181,15 @@ export default function LayerControls({ layers, onChange, hasTiles, hasPreview }
             <hr style={HR} />
             <span style={{ ...SUBLABEL, marginBottom: '5px' }}>Change Types</span>
             <LegendRows items={CHANGE_LEGEND} />
+          </>
+        )}
+
+        {/* ── Site Status Legend ───────────────────────────────── */}
+        {hasSites && layers.sites && (
+          <>
+            <hr style={HR} />
+            <span style={{ ...SUBLABEL, marginBottom: '5px' }}>Site Status</span>
+            <LegendRows items={SITE_LEGEND} />
           </>
         )}
 

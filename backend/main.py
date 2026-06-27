@@ -2,10 +2,10 @@
 AranyAI FastAPI backend — all routes.
 
 Run:
-  uvicorn backend.main:app --reload --port 8000
+  uvicorn backend.main:app --reload --port 8080
 
 Docs:
-  http://localhost:8000/docs
+  http://localhost:8080/docs
 """
 import json
 import logging
@@ -20,10 +20,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .config import settings
-from .database import Alert, AOI, Base, ChangeRun, ChangeVector, RangerAssignment, engine, get_session
+from .database import Alert, AOI, Base, ChangeRun, ChangeVector, RangerAssignment, Site, engine, get_session
 from .gee_runner import (
-    _class_distribution, _composite, _init, annual_windows, DW_PALETTE,
-    get_tile_urls, nrt_windows, run_gee_detection,
+    _class_distribution, _composite, _init, DW_PALETTE,
+    get_tile_urls, run_gee_detection,
 )
 
 logging.basicConfig(
@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="AranyAI API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="AranyAI API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,17 +58,26 @@ class AOICreate(BaseModel):
 
 
 class DetectRequest(BaseModel):
-    baseline_start: date
-    baseline_end:   date
-    current_start:  date
-    current_end:    date
-    mode:           Literal["nrt", "annual", "custom"] = "nrt"
+    """
+    The server computes its own rolling baseline/current windows (see
+    gee_runner.detection_windows) — current_end only matters for
+    backtesting against a historical date. Normal operational use just
+    POSTs {"mode": "nrt"} and lets it default to today.
+    """
+    mode:        Literal["nrt", "annual"] = "nrt"
+    current_end: Optional[date] = None
 
 
 class AlertUpdate(BaseModel):
-    status:      Optional[Literal["open", "assigned", "resolved", "dismissed"]] = None
-    assigned_to: Optional[str] = None
-    notes:       Optional[str] = None
+    status:          Optional[Literal["open", "resolved", "dismissed"]] = None
+    assigned_to:     Optional[str] = None
+    notes:           Optional[str] = None
+    # Field-verification outcome — the feedback-loop hook. Distinct from
+    # `status`: confirming real change doesn't automatically close the
+    # case, the officer still has to act on it.
+    officer_outcome: Optional[Literal["confirmed", "false_alarm", "needs_follow_up"]] = None
+    officer_reason:  Optional[Literal["cloud_shadow", "harvest", "seasonal_flood", "natural_fall", "other"]] = None
+    verified_by:     Optional[str] = None
 
 
 class RangerAssignCreate(BaseModel):
@@ -76,11 +85,62 @@ class RangerAssignCreate(BaseModel):
     aoi_id:      str
 
 
+# ── Serialization helpers ──────────────────────────────────────────────────────
+
+def _alert_dict(a: Alert) -> dict:
+    return {
+        "id":                  a.id,
+        "aoi_id":              a.aoi_id,
+        "run_id":              a.run_id,
+        "site_id":             a.site_id,
+        "detection_mode":      a.detection_mode,
+        "change_type":         a.change_type,
+        "severity":            a.severity,
+        "area_ha":             a.area_ha,
+        "first_detected_at":   str(a.first_detected_at) if a.first_detected_at else None,
+        "confidence":          a.confidence,
+        "anomaly_z_score":     a.anomaly_z_score,
+        "baseline_trees_prob": a.baseline_trees_prob,
+        "current_trees_prob":  a.current_trees_prob,
+        "persistence_count":   a.persistence_count,
+        "explainability":      json.loads(a.explainability_bundle) if a.explainability_bundle else None,
+        "status":              a.status,
+        "assigned_to":         a.assigned_to,
+        "notes":               a.notes,
+        "officer_outcome":     a.officer_outcome,
+        "officer_reason":      a.officer_reason,
+        "verified_at":         str(a.verified_at) if a.verified_at else None,
+        "verified_by":         a.verified_by,
+        "created_at":          str(a.created_at),
+        "resolved_at":         str(a.resolved_at) if a.resolved_at else None,
+    }
+
+
+def _site_dict(s: Site) -> dict:
+    precision = (
+        round(s.precision_confirmed / s.precision_total, 2)
+        if s.precision_total else None
+    )
+    return {
+        "id":                  s.id,
+        "aoi_id":              s.aoi_id,
+        "change_type":         s.change_type,
+        "geojson":             json.loads(s.geom_geojson),
+        "status":              s.status,
+        "persistence_count":   s.persistence_count,
+        "first_detected_at":   str(s.first_detected_at) if s.first_detected_at else None,
+        "last_observed_at":    str(s.last_observed_at) if s.last_observed_at else None,
+        "precision_confirmed": s.precision_confirmed,
+        "precision_total":     s.precision_total,
+        "precision":           precision,
+    }
+
+
 # ── Health ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "AranyAI", "version": "0.1.0"}
+    return {"status": "ok", "service": "AranyAI", "version": "0.2.0"}
 
 
 # ── AOI routes ────────────────────────────────────────────────────────────────
@@ -129,13 +189,9 @@ def get_aoi(aoi_id: str):
 @app.get("/api/aois/{aoi_id}/preview")
 def preview_aoi(aoi_id: str, days: int = 30):
     """
-    Fast land-cover snapshot for an AOI — no export task, no alerts, no DB write.
-    Use this immediately after selecting an AOI so the officer sees what's
-    actually there (tree %, crop %, built %...) before committing to a full
-    NRT/annual detection run, which is slower and creates a GCS export task.
-
-    Returns class_distribution (ha per DW class) and a clipped DW tile URL
-    for the last `days` days (default 30).
+    Fast land-cover snapshot for an AOI — no export task, no alerts, no DB
+    write. Use this immediately after selecting an AOI so the officer
+    sees what's actually there before committing to a full detection run.
     """
     with get_session() as db:
         aoi_row = db.query(AOI).filter(AOI.id == aoi_id).first()
@@ -216,10 +272,11 @@ def assign_ranger(body: RangerAssignCreate):
 @app.post("/api/aois/{aoi_id}/detect", status_code=202)
 def trigger_detection(aoi_id: str, req: DetectRequest, bg: BackgroundTasks):
     """
-    Start a change detection run.
-    Returns immediately — GEE runs in a background thread.
-    Poll GET /api/runs/{run_id} for status.
+    Start a detection run. Returns immediately — GEE runs in a background
+    thread. Poll GET /api/runs/{run_id} for status.
     """
+    current_end = str(req.current_end) if req.current_end else str(date.today())
+
     with get_session() as db:
         aoi = db.query(AOI).filter(AOI.id == aoi_id).first()
         if not aoi:
@@ -231,10 +288,6 @@ def trigger_detection(aoi_id: str, req: DetectRequest, bg: BackgroundTasks):
             id=run_id,
             aoi_id=aoi_id,
             detection_mode=req.mode,
-            baseline_start=req.baseline_start,
-            baseline_end=req.baseline_end,
-            current_start=req.current_start,
-            current_end=req.current_end,
             status="running",
         ))
 
@@ -242,10 +295,7 @@ def trigger_detection(aoi_id: str, req: DetectRequest, bg: BackgroundTasks):
         run_gee_detection,
         run_id=run_id,
         aoi_geojson=geojson,
-        baseline_start=str(req.baseline_start),
-        baseline_end=str(req.baseline_end),
-        current_start=str(req.current_start),
-        current_end=str(req.current_end),
+        current_end=current_end,
         mode=req.mode,
     )
 
@@ -295,8 +345,8 @@ def get_run(run_id: str):
             "aoi_id":          run.aoi_id,
             "status":          run.status,
             "detection_mode":  run.detection_mode,
-            "baseline":        f"{run.baseline_start}/{run.baseline_end}",
-            "current":         f"{run.current_start}/{run.current_end}",
+            "baseline":        f"{run.baseline_start}/{run.baseline_end}" if run.baseline_start else None,
+            "current":         f"{run.current_start}/{run.current_end}" if run.current_start else None,
             "baseline_images": run.baseline_images,
             "current_images":  run.current_images,
             "areas_ha": {
@@ -316,14 +366,8 @@ def get_run(run_id: str):
 @app.get("/api/runs/{run_id}/tiles")
 def get_run_tiles(run_id: str, refresh: bool = False):
     """
-    Return GEE tile URLs for the map panel.
-    URLs expire ~2 hours. Use ?refresh=true to force regeneration.
-
-    Returns:
-      dw_label   — DW classification overlay (XYZ tile URL)
-      before_s2  — Sentinel-2 before change
-      after_s2   — Sentinel-2 after change
-      aoi_geojson — AOI polygon for the map
+    Return GEE tile URLs for the map panel. URLs expire ~2 hours.
+    Use ?refresh=true to force regeneration.
     """
     with get_session() as db:
         run = db.query(ChangeRun).filter(ChangeRun.id == run_id).first()
@@ -335,7 +379,6 @@ def get_run_tiles(run_id: str, refresh: bool = False):
         aoi_row = db.query(AOI).filter(AOI.id == run.aoi_id).first()
         aoi_geojson = json.loads(aoi_row.geojson)
 
-        # Return cached tiles if still valid
         now = datetime.utcnow()
         if (
             not refresh
@@ -353,12 +396,12 @@ def get_run_tiles(run_id: str, refresh: bool = False):
             }
 
         baseline_end = str(run.baseline_end)
+        current_start = str(run.current_start)
         current_end  = str(run.current_end)
 
-    # Regenerate tile URLs (they expired)
     _init()
     aoi = ee.Geometry(aoi_geojson)
-    c_label, _, _, _ = _composite(aoi, str(run.current_start), str(run.current_end))
+    c_label, _, _, _ = _composite(aoi, current_start, current_end)
     urls = get_tile_urls(aoi, baseline_end, current_end, c_label)
 
     expires = datetime.utcnow() + timedelta(hours=2)
@@ -382,8 +425,8 @@ def get_run_tiles(run_id: str, refresh: bool = False):
 @app.get("/api/runs/{run_id}/vectors")
 def get_run_vectors(run_id: str):
     """
-    Return all change polygons for this run as a GeoJSON FeatureCollection.
-    Use as a Mapbox vector source.
+    Return all change polygons for this run as a GeoJSON FeatureCollection
+    (includes both candidate and promoted clusters — see properties.site_status).
     """
     with get_session() as db:
         run = db.query(ChangeRun).filter(ChangeRun.id == run_id).first()
@@ -417,6 +460,64 @@ def get_run_vectors(run_id: str):
     return {"type": "FeatureCollection", "features": features}
 
 
+# ── Site routes ────────────────────────────────────────────────────────────────
+
+@app.get("/api/sites")
+def list_sites(
+    aoi_id: Optional[str] = None,
+    status: Optional[str] = None,
+    limit:  int = Query(100, le=300),
+):
+    """
+    Persistent locations — the map's "sites" layer. ?status=candidate
+    shows sites still awaiting a confirming pass; ?status=open shows
+    promoted, officer-visible sites.
+    """
+    with get_session() as db:
+        q = db.query(Site)
+        if aoi_id: q = q.filter(Site.aoi_id == aoi_id)
+        if status: q = q.filter(Site.status == status)
+        sites = q.order_by(Site.last_observed_at.desc()).limit(limit).all()
+        return [_site_dict(s) for s in sites]
+
+
+@app.get("/api/sites/{site_id}")
+def get_site(site_id: str):
+    """Site detail with its full alert history — the longitudinal view."""
+    with get_session() as db:
+        site = db.query(Site).filter(Site.id == site_id).first()
+        if not site:
+            raise HTTPException(404, "Site not found")
+        alerts = (
+            db.query(Alert)
+            .filter(Alert.site_id == site_id)
+            .order_by(Alert.created_at.desc())
+            .all()
+        )
+        out = _site_dict(site)
+        out["alerts"] = [_alert_dict(a) for a in alerts]
+        return out
+
+
+@app.get("/api/aois/{aoi_id}/precision")
+def aoi_precision(aoi_id: str):
+    """
+    Per-AOI trust metric: confirmed / total officer outcomes recorded
+    across all sites in this AOI. The single number worth showing a DFO —
+    more credible than any dashboard polish.
+    """
+    with get_session() as db:
+        sites = db.query(Site).filter(Site.aoi_id == aoi_id).all()
+        confirmed = sum(s.precision_confirmed or 0 for s in sites)
+        total     = sum(s.precision_total or 0 for s in sites)
+        return {
+            "aoi_id": aoi_id,
+            "confirmed": confirmed,
+            "total": total,
+            "precision": round(confirmed / total, 3) if total else None,
+        }
+
+
 # ── Alert routes ──────────────────────────────────────────────────────────────
 
 @app.get("/api/alerts")
@@ -429,7 +530,8 @@ def list_alerts(
 ):
     """
     List alerts. Filter with ?status=open&severity=high&aoi_id=...
-    Use ?assigned_to=ranger_name for a ranger-scoped view.
+    Use ?assigned_to=ranger_name for a ranger-scoped view. Sorted by
+    confidence first — the queue order officers should triage in.
     """
     with get_session() as db:
         q = db.query(Alert)
@@ -437,42 +539,53 @@ def list_alerts(
         if severity:    q = q.filter(Alert.severity    == severity)
         if aoi_id:       q = q.filter(Alert.aoi_id      == aoi_id)
         if assigned_to:  q = q.filter(Alert.assigned_to == assigned_to)
-        alerts = q.order_by(Alert.created_at.desc()).limit(limit).all()
-
-        return [
-            {
-                "id":                a.id,
-                "aoi_id":            a.aoi_id,
-                "run_id":            a.run_id,
-                "detection_mode":    a.detection_mode,
-                "change_type":       a.change_type,
-                "severity":          a.severity,
-                "area_ha":           a.area_ha,
-                "first_detected_at": str(a.first_detected_at) if a.first_detected_at else None,
-                "confidence":        a.confidence,
-                "status":            a.status,
-                "assigned_to":       a.assigned_to,
-                "notes":             a.notes,
-                "created_at":        str(a.created_at),
-                "resolved_at":       str(a.resolved_at) if a.resolved_at else None,
-            }
-            for a in alerts
-        ]
+        alerts = q.order_by(Alert.confidence.desc(), Alert.created_at.desc()).limit(limit).all()
+        return [_alert_dict(a) for a in alerts]
 
 
 @app.patch("/api/alerts/{alert_id}")
 def update_alert(alert_id: str, body: AlertUpdate):
-    """Update alert status, assign to ranger, or add notes."""
+    """
+    Update alert status, assign to a ranger, or record a field-verification
+    outcome. officer_outcome is the feedback-loop hook: it updates the
+    linked Site's precision_confirmed/precision_total, which is what lets
+    AranyAI report a real per-AOI trust metric instead of a bare alert count.
+    """
     with get_session() as db:
         alert = db.query(Alert).filter(Alert.id == alert_id).first()
         if not alert:
             raise HTTPException(404, "Alert not found")
-        if body.status is not None:
-            alert.status = body.status
-            if body.status == "resolved":
-                alert.resolved_at = datetime.utcnow()
+
+        site = db.query(Site).filter(Site.id == alert.site_id).first() if alert.site_id else None
+
         if body.assigned_to is not None:
             alert.assigned_to = body.assigned_to
         if body.notes is not None:
             alert.notes = body.notes
-    return {"id": alert.id, "status": alert.status, "assigned_to": alert.assigned_to}
+
+        if body.officer_outcome is not None:
+            alert.officer_outcome = body.officer_outcome
+            alert.officer_reason  = body.officer_reason
+            alert.verified_at     = datetime.utcnow()
+            alert.verified_by     = body.verified_by
+
+            if body.officer_outcome in ("confirmed", "false_alarm") and site:
+                site.precision_total = (site.precision_total or 0) + 1
+                if body.officer_outcome == "confirmed":
+                    site.precision_confirmed = (site.precision_confirmed or 0) + 1
+
+            if body.officer_outcome == "false_alarm":
+                alert.status = "dismissed"
+                if site:
+                    site.status = "false_alarm"
+
+        if body.status is not None:
+            alert.status = body.status
+            if body.status == "resolved":
+                alert.resolved_at = datetime.utcnow()
+                if site:
+                    site.status = "resolved"
+            elif body.status == "dismissed" and site:
+                site.status = "false_alarm"
+
+    return _alert_dict(alert)

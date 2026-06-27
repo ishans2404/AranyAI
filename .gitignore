@@ -1,5 +1,6 @@
 aranyai.db
 eedocs.txt
+validate_anomaly_signal.py
 
 # ── Secrets — NEVER commit these ─────────────────────────────────────────────
 gee-sa-key.json
