@@ -1,0 +1,140 @@
+/* ════════════════════════════════════════════════════════════════════════
+   AranyAI — Design Tokens
+   Source of truth: MASTERCARD_DESIGN.md. Every color below is one of the
+   document's named tokens — nothing outside that palette is introduced.
+
+   What changed vs. the source doc, and why:
+   • TYPE SCALE — the doc's sizes are a marketing page (64px H1). A 200-row
+     alert table can't use that scale, so sizes are recompressed for an
+     operational surface. The DNA is kept exactly: weight 500 + negative
+     tracking on headings, weight 450 body (the doc's signature detail),
+     700-weight uppercase eyebrows with positive tracking.
+   • SEVERITY / STATUS COLOR — the source doc has no severity system (it's
+     a marketing site). Mapped by semantic proximity instead of inventing
+     hues: Signal Orange = urgent, Clay Brown = elevated, Link Blue =
+     informational. "Good/confirmed" deliberately does NOT get a green —
+     green isn't in the palette, so confirmation is carried by an ink
+     check + label, not color. See HANDOFF.md §Design System for the full
+     rationale.
+   • RADIUS — kept the doc's actual rule ("small ≤6, medium 20-40, full
+     pill 99+, nothing in between"). Buttons/badges round to a true pill
+     at any height; dense containers (cards, tables, inputs) take the
+     small end; hero-style surfaces (map frame, dashboard banner) take
+     the dramatic end.
+   • DW land-cover colors (trees/water/crops/etc.) are NOT part of this
+     system — they're Dynamic World's own dataset palette, a scientific
+     visualization layer, not UI chrome. Defined separately in dw.js.
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Mastercard palette — verbatim ──────────────────────────────── */
+  --ink:            #141413;
+  --charcoal:       #262627;
+  --slate:          #696969;
+  --granite:        #555555;
+  --graphite:       #565656;
+  --dust-taupe:     #D1CDC7;
+
+  --canvas:         #F3F0EE;   /* page background — never pure white */
+  --lifted:         #FCFBFA;   /* nested "paper on paper" surfaces */
+  --white:          #FFFFFF;   /* floating chrome, modals, satellite CTAs */
+  --soft-bone:      #F4F4F4;
+
+  --signal:         #CF4500;   /* decisive / urgent */
+  --signal-light:   #F37338;   /* secondary accent, active indicators */
+  --clay:           #9A3A0A;   /* elevated, between ink and signal */
+  --link-blue:      #3860BE;   /* informational */
+
+  /* Brand mark — reserved for the logo only, never used as a UI color */
+  --brand-red:      #EB001B;
+  --brand-yellow:   #F79E1B;
+
+  /* ── Semantic aliases (what the app actually reaches for) ─────────── */
+  --bg:             var(--canvas);
+  --surface:        var(--white);
+  --surface-sunken: var(--lifted);
+  --surface-muted:  var(--soft-bone);
+  --border:         #E4DFD9;          /* derived: ink at ~6% on cream */
+  --border-strong:  #CFC8C0;
+
+  --text-primary:   var(--ink);
+  --text-secondary: var(--slate);
+  --text-tertiary:  var(--dust-taupe);
+  --text-on-ink:    var(--canvas);
+  --text-on-signal: var(--white);
+
+  /* Severity — intensity carries hierarchy, not new hues */
+  --sev-critical-fg:   #FFFFFF;
+  --sev-critical-bg:   var(--signal);
+  --sev-high-fg:        var(--signal);
+  --sev-high-bg:        #FBE7DC;
+  --sev-medium-fg:      var(--clay);
+  --sev-medium-bg:      #F1E1D6;
+  --sev-low-fg:         var(--link-blue);
+  --sev-low-bg:         #E6ECF8;
+
+  /* Lifecycle / outcome status */
+  --status-open-fg:        var(--white);
+  --status-open-bg:        var(--ink);
+  --status-candidate-fg:   var(--slate);
+  --status-candidate-bg:   var(--soft-bone);
+  --status-resolved-fg:    var(--ink);
+  --status-resolved-bg:    var(--lifted);
+  --status-dismissed-fg:   var(--dust-taupe);
+  --status-dismissed-bg:   var(--soft-bone);
+
+  /* Change-type categorical colors — the 4 remaining distinct hues in
+     the palette, assigned by category only. Meaning is carried by the
+     label, not the hue. */
+  --change-deforestation:  var(--signal);
+  --change-encroachment:   var(--clay);
+  --change-agri:           var(--signal-light);
+  --change-bare:           var(--link-blue);
+
+  /* ── Type ──────────────────────────────────────────────────────────
+     MarkForMC is proprietary/licensed. Using Inter — the doc's own
+     stated generic stand-in — at weight 450 for body, matching the
+     source system's signature half-step weight. */
+  --font:           'Inter', 'Sofia Sans', system-ui, sans-serif;
+  --font-mono:      'IBM Plex Mono', 'Courier New', monospace;
+
+  --text-page-title:    22px;  --lh-page-title:    28px;  --ls-page-title:    -0.02em;
+  --text-section-title: 16px;  --lh-section-title: 22px;  --ls-section-title: -0.02em;
+  --text-card-title:    14px;  --lh-card-title:    18px;  --ls-card-title:    -0.02em;
+  --text-eyebrow:       11px;  --lh-eyebrow:       14px;  --ls-eyebrow:        0.04em;
+  --text-body:          13px;  --lh-body:          18.5px;
+  --text-small:         11.5px;--lh-small:          15px;
+  --text-control:       13px;  --lh-control:       16px;  --ls-control:       -0.018em;
+  --text-display:       28px;  --lh-display:       32px;  --ls-display:       -0.02em;
+
+  --weight-body:    450;
+  --weight-medium:  500;
+  --weight-bold:    700;
+
+  /* ── Radius — the doc's actual rule: small / medium-large / full pill,
+     nothing in between ─────────────────────────────────────────────── */
+  --r-xs:    4px;    /* checkboxes, tiny chips */
+  --r-sm:    6px;    /* cards, inputs, tables — dense functional surfaces */
+  --r-lg:    24px;   /* hero-style surfaces: map frame, banners */
+  --r-xl:    32px;
+  --r-pill:  999px;  /* buttons, badges, nav — true pill at any height */
+  --r-circle: 50%;
+
+  /* ── Elevation — atmospheric, large-spread, low-opacity (the doc's
+     own elevation philosophy: cushioning, not directional light) ──── */
+  --shadow-1: 0 4px 24px rgba(20, 20, 19, 0.05);
+  --shadow-2: 0 18px 40px rgba(20, 20, 19, 0.08);
+  --shadow-3: 0 40px 80px rgba(20, 20, 19, 0.16);
+
+  /* ── Spacing — 8px base unit, half-steps allowed for UI control ──── */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  /* ── Layout ────────────────────────────────────────────────────────── */
+  --sidebar-w:       236px;
+  --sidebar-w-collapsed: 64px;
+  --topbar-h:        56px;
+  --workspace-tabs-h: 44px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
