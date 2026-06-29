@@ -12,12 +12,12 @@ const NAV = [
   { to: '/reports',   label: 'Reports', icon: FileBarChart2, permission: PERMISSIONS.VIEW_REPORTS },
 ]
 
-export default function Sidebar({ mobileOpen, onCloseMobile }) {
+export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const { can } = useAuth()
 
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-brand">
         <div className="sidebar-brand-mark">🌲</div>
         {!collapsed && (
@@ -28,7 +28,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile }) {
         )}
       </div>
 
-      <nav className="sidebar-nav" onClick={onCloseMobile}>
+      <nav className="sidebar-nav">
         <div className="sidebar-section-label">{!collapsed && 'Operations'}</div>
         {NAV.filter(n => !n.permission || can(n.permission)).map(({ to, label, icon: Icon }) => (
           <NavLink

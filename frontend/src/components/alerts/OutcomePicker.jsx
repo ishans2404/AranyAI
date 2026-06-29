@@ -13,7 +13,7 @@ export default function OutcomePicker({ alert, onUpdate, viewerName }) {
 
   return (
     <div>
-      <div className="row gap-2">
+      <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
         <button className={`btn btn-xs btn-primary ${alert.officer_outcome === 'confirmed' ? '' : 'btn-secondary'}`} onClick={() => submit('confirmed')}>
           <Check size={12} /> Confirm
         </button>

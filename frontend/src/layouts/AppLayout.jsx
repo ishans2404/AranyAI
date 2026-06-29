@@ -1,7 +1,7 @@
-import { useState } from 'react'
 import { Outlet, useLocation, useParams } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import BottomNav from './BottomNav'
 import { useAppData } from '../hooks/useAppData'
 
 const SECTION_LABEL = {
@@ -32,12 +32,11 @@ function useBreadcrumb() {
 }
 
 export default function AppLayout() {
-  const [mobileOpen, setMobileOpen] = useState(false)
   const crumbs = useBreadcrumb()
 
   return (
     <div className="app-shell">
-      <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
+      <Sidebar />
       <div className="main-col">
         <Topbar crumbs={crumbs} />
         <div className="workspace">
@@ -48,6 +47,7 @@ export default function AppLayout() {
           <span>Powered by Google Earth Engine · Dynamic World V1 · Sentinel-2</span>
         </footer>
       </div>
+      <BottomNav />
     </div>
   )
 }

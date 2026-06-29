@@ -7,6 +7,7 @@ import { api } from '../lib/api'
 import { CHANGE_TYPES } from '../lib/dw'
 import { fmtDate, fmtHa } from '../lib/format'
 import { SeverityBadge, ChangeDot, EmptyState, SkeletonLines, ConfidenceMeter } from '../components/ui/Primitives'
+import ResponsiveTable from '../components/ui/ResponsiveTable'
 import AlertDrawer from '../components/alerts/AlertDrawer'
 
 export default function Alerts() {
@@ -48,6 +49,22 @@ export default function Alerts() {
     setActiveAlert(prev => prev && prev.id === alertId ? { ...prev, ...updates } : prev)
   }
 
+  const columns = [
+    {
+      key: 'type', label: 'Type', primary: true,
+      render: a => {
+        const ct = CHANGE_TYPES[a.change_type] || { label: a.change_type, color: 'var(--slate)' }
+        return <span className="row gap-2" style={{ fontWeight: 500 }}><ChangeDot color={ct.color} /> {ct.label}</span>
+      },
+    },
+    { key: 'area', label: 'Area', render: a => areaName(a.aoi_id) },
+    { key: 'severity', label: 'Severity', render: a => <SeverityBadge severity={a.severity} /> },
+    { key: 'confidence', label: 'Confidence', render: a => <ConfidenceMeter value={a.confidence} /> },
+    { key: 'size', label: 'Size', mono: true, render: a => fmtHa(a.area_ha) },
+    { key: 'first_seen', label: 'First seen', mono: true, render: a => a.first_detected_at ? fmtDate(a.first_detected_at, { year: undefined }) : '—' },
+    { key: 'status', label: 'Status', render: a => <span className={`badge badge-${a.status}`}>{a.status}</span> },
+  ]
+
   return (
     <div className="workspace-scroll">
       <div className="page-header">
@@ -55,21 +72,21 @@ export default function Alerts() {
         <p className="page-subtitle">Detections sorted by confidence — review highest-confidence cases first.</p>
       </div>
 
-      <div className="row gap-3" style={{ marginBottom: 16, flexWrap: 'wrap' }}>
-        <select className="form-control" style={{ width: 150 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+      <div className="filter-row">
+        <select className="form-control filter-control" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="open">Open</option>
           <option value="resolved">Resolved</option>
           <option value="dismissed">Dismissed</option>
           <option value="all">All statuses</option>
         </select>
-        <select className="form-control" style={{ width: 150 }} value={severityFilter} onChange={e => setSeverityFilter(e.target.value)}>
+        <select className="form-control filter-control" value={severityFilter} onChange={e => setSeverityFilter(e.target.value)}>
           <option value="all">All severities</option>
           <option value="critical">Critical</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
-        <select className="form-control" style={{ width: 200 }} value={areaFilter} onChange={e => setAreaFilter(e.target.value)}>
+        <select className="form-control filter-control filter-control-wide" value={areaFilter} onChange={e => setAreaFilter(e.target.value)}>
           <option value="all">All areas</option>
           {visibleAreas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
@@ -77,36 +94,14 @@ export default function Alerts() {
 
       {loading ? (
         <div className="card card-pad" style={{ maxWidth: 420 }}><SkeletonLines count={5} /></div>
-      ) : filtered.length === 0 ? (
-        <EmptyState icon={<Eye size={18} />} title="No alerts match these filters" />
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Type</th><th>Area</th><th>Severity</th><th>Confidence</th>
-                <th>Size</th><th>First seen</th><th>Status</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(a => {
-                const ct = CHANGE_TYPES[a.change_type] || { label: a.change_type, color: 'var(--slate)' }
-                return (
-                  <tr key={a.id} style={{ cursor: 'pointer' }} onClick={() => setActiveAlert(a)}>
-                    <td className="t-small" style={{ fontWeight: 500 }}><ChangeDot color={ct.color} /> {ct.label}</td>
-                    <td className="t-small">{areaName(a.aoi_id)}</td>
-                    <td><SeverityBadge severity={a.severity} /></td>
-                    <td style={{ width: 130 }}><ConfidenceMeter value={a.confidence} /></td>
-                    <td className="t-small t-mono">{fmtHa(a.area_ha)}</td>
-                    <td className="t-small t-mono">{a.first_detected_at ? fmtDate(a.first_detected_at, { year: undefined }) : '—'}</td>
-                    <td><span className={`badge badge-${a.status}`}>{a.status}</span></td>
-                    <td><button className="btn btn-xs btn-secondary" onClick={(e) => { e.stopPropagation(); setActiveAlert(a) }}>Review</button></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveTable
+          columns={columns}
+          rows={filtered}
+          rowKey="id"
+          onRowClick={setActiveAlert}
+          emptyState={<EmptyState icon={<Eye size={18} />} title="No alerts match these filters" />}
+        />
       )}
 
       <AlertDrawer

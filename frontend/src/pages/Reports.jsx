@@ -6,6 +6,7 @@ import { ROLES } from '../auth/roles'
 import { api } from '../lib/api'
 import { fmtDate, fmtHa, downloadCsv } from '../lib/format'
 import { EmptyState, SkeletonLines } from '../components/ui/Primitives'
+import ResponsiveTable from '../components/ui/ResponsiveTable'
 
 export default function Reports() {
   const { user } = useAuth()
@@ -32,6 +33,15 @@ export default function Reports() {
     any_change_ha: r.any_change_ha, deforestation_ha: r.deforestation_ha,
   })))
 
+  const columns = [
+    { key: 'area', label: 'Area', primary: true, render: r => r.aoiName },
+    { key: 'date', label: 'Date', mono: true, render: r => fmtDate(r.run_at) },
+    { key: 'mode', label: 'Mode', render: r => r.detection_mode },
+    { key: 'status', label: 'Status', render: r => <span className={`badge badge-${r.status === 'done' ? 'low' : r.status === 'failed' ? 'critical' : 'medium'}`}>{r.status}</span> },
+    { key: 'disturbance', label: 'Disturbance', mono: true, render: r => fmtHa(r.any_change_ha) },
+    { key: 'deforestation', label: 'Deforestation', mono: true, render: r => fmtHa(r.deforestation_ha) },
+  ]
+
   return (
     <div className="workspace-scroll">
       <div className="page-header">
@@ -42,40 +52,25 @@ export default function Reports() {
         </p>
       </div>
 
-      <div className="row-between" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-        <select className="form-control" style={{ width: 220 }} value={areaId} onChange={e => setAreaId(e.target.value)}>
+      <div className="row-between stack-on-mobile gap-3" style={{ marginBottom: 16, alignItems: 'flex-start' }}>
+        <select className="form-control reports-area-select" value={areaId} onChange={e => setAreaId(e.target.value)}>
           <option value="all">All areas</option>
           {visibleAreas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <button className="btn btn-secondary" disabled={runs.length === 0} onClick={exportCsv}>
+        <button className="btn btn-secondary btn-full" disabled={runs.length === 0} onClick={exportCsv}>
           <Download size={14} /> Export CSV
         </button>
       </div>
 
       {loading ? (
         <div className="card card-pad" style={{ maxWidth: 420 }}><SkeletonLines count={5} /></div>
-      ) : runs.length === 0 ? (
-        <EmptyState icon={<FileBarChart2 size={18} />} title="No detection runs yet" />
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr><th>Area</th><th>Date</th><th>Mode</th><th>Status</th><th>Disturbance</th><th>Deforestation</th></tr>
-            </thead>
-            <tbody>
-              {runs.map(r => (
-                <tr key={r.id}>
-                  <td className="t-small" style={{ fontWeight: 500 }}>{r.aoiName}</td>
-                  <td className="t-small t-mono">{fmtDate(r.run_at)}</td>
-                  <td className="t-small">{r.detection_mode}</td>
-                  <td><span className={`badge badge-${r.status === 'done' ? 'low' : r.status === 'failed' ? 'critical' : 'medium'}`}>{r.status}</span></td>
-                  <td className="t-small t-mono">{fmtHa(r.any_change_ha)}</td>
-                  <td className="t-small t-mono">{fmtHa(r.deforestation_ha)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveTable
+          columns={columns}
+          rows={runs}
+          rowKey="id"
+          emptyState={<EmptyState icon={<FileBarChart2 size={18} />} title="No detection runs yet" />}
+        />
       )}
     </div>
   )

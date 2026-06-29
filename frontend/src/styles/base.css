@@ -78,7 +78,18 @@ img { display: block; max-width: 100%; }
   }
 }
 
-/* ── Touch targets — the Ranger surface is used on tablets in the field ── */
-@media (pointer: coarse) {
-  .btn, .nav-link, .form-control, .tab { min-height: 40px; }
+/* ── Touch targets — 44px minimum per iOS HIG / Android Material,
+   applied below the tablet breakpoint (not just pointer:coarse, which
+   misses some touch-enabled laptops and undercounts hybrid devices) ── */
+@media (max-width: 768px) {
+  .btn, .nav-link, .form-control, .tab, .bottom-nav-link, .pill-toggle {
+    min-height: var(--touch-min);
+  }
+  .btn-icon { min-width: var(--touch-min); }
+  /* iOS Safari zooms the viewport on focus if an input's computed
+     font-size is under 16px — this is the actual mechanism, not a
+     style preference. */
+  .form-control, select.form-control, textarea.form-control {
+    font-size: 16px;
+  }
 }

@@ -6,6 +6,7 @@ import { useAppData } from '../hooks/useAppData'
 import { ROLES } from '../auth/roles'
 import { api } from '../lib/api'
 import { Kpi } from '../components/ui/Primitives'
+import ResponsiveTable from '../components/ui/ResponsiveTable'
 import { fmtDate, fmtHa } from '../lib/format'
 
 export default function Dashboard() {
@@ -87,21 +88,16 @@ export default function Dashboard() {
           {recentRuns.length === 0 ? (
             <p className="t-small t-muted">No detection runs yet — open an area and run detection.</p>
           ) : (
-            <div className="table-wrap">
-              <table className="table">
-                <thead><tr><th>Area</th><th>Date</th><th>Status</th><th>Disturbance</th></tr></thead>
-                <tbody>
-                  {recentRuns.map(r => (
-                    <tr key={r.id}>
-                      <td className="t-small" style={{ fontWeight: 500 }}>{r.aoiName || '—'}</td>
-                      <td className="t-small t-mono">{fmtDate(r.run_at)}</td>
-                      <td><span className={`badge badge-${r.status === 'done' ? 'low' : r.status === 'failed' ? 'critical' : 'medium'}`}>{r.status}</span></td>
-                      <td className="t-small t-mono">{fmtHa(r.any_change_ha)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ResponsiveTable
+              rowKey="id"
+              rows={recentRuns}
+              columns={[
+                { key: 'area', label: 'Area', primary: true, render: r => r.aoiName || '—' },
+                { key: 'date', label: 'Date', mono: true, render: r => fmtDate(r.run_at) },
+                { key: 'status', label: 'Status', render: r => <span className={`badge badge-${r.status === 'done' ? 'low' : r.status === 'failed' ? 'critical' : 'medium'}`}>{r.status}</span> },
+                { key: 'disturbance', label: 'Disturbance', mono: true, render: r => fmtHa(r.any_change_ha) },
+              ]}
+            />
           )}
         </div>
 

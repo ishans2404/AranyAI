@@ -41,7 +41,7 @@ function LandCover({ dist, baseline, label }) {
               <span className="t-small t-mono">
                 {r.ha.toFixed(1)} ha
                 {delta != null && Math.abs(delta) > 0.05 && (
-                  <span style={{ color: delta > 0 ? 'var(--signal)' : 'var(--text-secondary)', marginLeft: 4 }}>
+                  <span style={{ color: delta > 0 ? 'var(--signal-strong)' : 'var(--text-secondary)', marginLeft: 4 }}>
                     {delta > 0 ? '+' : ''}{delta.toFixed(1)}
                   </span>
                 )}
@@ -54,7 +54,7 @@ function LandCover({ dist, baseline, label }) {
         )
       })}
       {treeHa === 0 && (
-        <p className="t-small" style={{ marginTop: 8, color: 'var(--clay)' }}>
+        <p className="t-small" style={{ marginTop: 8, color: 'var(--signal-strong)' }}>
           No tree cover in this area — deforestation/encroachment alerts can't trigger here by design.
         </p>
       )}
@@ -74,13 +74,13 @@ export default function Monitor() {
     : null
 
   return (
-    <div className="row" style={{ height: '100%', alignItems: 'stretch' }}>
-      <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+    <div className="monitor-layout">
+      <div className="monitor-map">
         <MapCanvas aoi={aoi?.geojson} tiles={tiles} preview={preview} vectors={vectors} sites={sites} layers={layers} />
         <LayerPanel layers={layers} onChange={setLayers} hasTiles={!!tiles} hasPreview={!!preview?.dw_tile_url} hasSites={sites.length > 0} />
       </div>
 
-      <div className="scroll-thin" style={{ width: 340, flexShrink: 0, borderLeft: '1px solid var(--border)', background: 'var(--surface)', padding: 'var(--sp-5)' }}>
+      <div className="monitor-panel scroll-thin">
         <h3 className="t-card-title" style={{ marginBottom: 4 }}>Rolling-baseline anomaly detection</h3>
         <p className="t-small t-muted" style={{ marginBottom: 14 }}>
           Baseline: 12-month median, excludes last 30 days · Current: last 15 days · Promotion: 2 confirming passes

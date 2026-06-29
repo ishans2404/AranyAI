@@ -11,14 +11,14 @@ function whenReady(map, fn) {
 }
 
 const SITE_STATUS_COLOR = {
-  candidate: '#9CA3AF', open: '#CF4500', resolved: '#141413', false_alarm: '#D1CDC7',
+  candidate: '#9C9580', open: '#BC6C25', resolved: '#283618', false_alarm: '#C9C2A0',
 }
 
 function popupHtml(title, body) {
   return `
     <div style="font-family:'Inter',sans-serif;font-size:12px;padding:2px 0">
-      <strong style="color:#141413;text-transform:capitalize">${title}</strong><br/>
-      <span style="color:#696969">${body}</span>
+      <strong style="color:#283618;text-transform:capitalize">${title}</strong><br/>
+      <span style="color:#5B604D">${body}</span>
     </div>
   `
 }
@@ -58,8 +58,8 @@ export default function MapCanvas({ aoi, tiles, preview, vectors, sites, layers 
         map.getSource('aoi').setData(data)
       } else {
         map.addSource('aoi', { type: 'geojson', data })
-        map.addLayer({ id: 'aoi-fill', type: 'fill', source: 'aoi', paint: { 'fill-color': '#141413', 'fill-opacity': 0.05 } })
-        map.addLayer({ id: 'aoi-line', type: 'line', source: 'aoi', paint: { 'line-color': '#CF4500', 'line-width': 2, 'line-dasharray': [3, 2] } })
+        map.addLayer({ id: 'aoi-fill', type: 'fill', source: 'aoi', paint: { 'fill-color': '#283618', 'fill-opacity': 0.05 } })
+        map.addLayer({ id: 'aoi-line', type: 'line', source: 'aoi', paint: { 'line-color': '#BC6C25', 'line-width': 2, 'line-dasharray': [3, 2] } })
       }
       const coords = aoi.type === 'Polygon' ? aoi.coordinates[0] : aoi.coordinates[0][0]
       const bounds = coords.reduce((b, c) => b.extend(c), new mapboxgl.LngLatBounds(coords[0], coords[0]))
@@ -147,7 +147,7 @@ export default function MapCanvas({ aoi, tiles, preview, vectors, sites, layers 
         type: 'FeatureCollection',
         features: sites.map(s => ({
           type: 'Feature', geometry: s.geojson,
-          properties: { id: s.id, status: s.status, change_type: s.change_type, persistence_count: s.persistence_count, color: SITE_STATUS_COLOR[s.status] || '#9CA3AF' },
+          properties: { id: s.id, status: s.status, change_type: s.change_type, persistence_count: s.persistence_count, color: SITE_STATUS_COLOR[s.status] || '#9C9580' },
         })),
       }
       if (map.getSource('sites')) { map.getSource('sites').setData(fc); return }

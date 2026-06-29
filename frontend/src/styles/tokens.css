@@ -1,61 +1,65 @@
 /* ════════════════════════════════════════════════════════════════════════
    AranyAI — Design Tokens
-   Source of truth: MASTERCARD_DESIGN.md. Every color below is one of the
-   document's named tokens — nothing outside that palette is introduced.
+   Palette: the five-color earthy set the department asked for —
+   ["#606c38","#283618","#fefae0","#dda15e","#bc6c25"] (olive, dark forest
+   green, cream, sand, rust). Replaces the earlier Mastercard-derived
+   palette; the STRUCTURE that doc established (pill buttons at any height,
+   small-vs-dramatic radius split, 450/500/700 type weights, atmospheric
+   low-opacity shadows) is unchanged — only color values moved.
 
-   What changed vs. the source doc, and why:
-   • TYPE SCALE — the doc's sizes are a marketing page (64px H1). A 200-row
-     alert table can't use that scale, so sizes are recompressed for an
-     operational surface. The DNA is kept exactly: weight 500 + negative
-     tracking on headings, weight 450 body (the doc's signature detail),
-     700-weight uppercase eyebrows with positive tracking.
-   • SEVERITY / STATUS COLOR — the source doc has no severity system (it's
-     a marketing site). Mapped by semantic proximity instead of inventing
-     hues: Signal Orange = urgent, Clay Brown = elevated, Link Blue =
-     informational. "Good/confirmed" deliberately does NOT get a green —
-     green isn't in the palette, so confirmation is carried by an ink
-     check + label, not color. See HANDOFF.md §Design System for the full
-     rationale.
-   • RADIUS — kept the doc's actual rule ("small ≤6, medium 20-40, full
-     pill 99+, nothing in between"). Buttons/badges round to a true pill
-     at any height; dense containers (cards, tables, inputs) take the
-     small end; hero-style surfaces (map frame, dashboard banner) take
-     the dramatic end.
-   • DW land-cover colors (trees/water/crops/etc.) are NOT part of this
-     system — they're Dynamic World's own dataset palette, a scientific
-     visualization layer, not UI chrome. Defined separately in dw.js.
+   How the 5 swatches map to roles:
+   • #283618 (dark green)  → --ink     text, sidebar, primary buttons
+   • #fefae0 (cream)        → --canvas  page background
+   • #bc6c25 (rust)         → --signal  urgent/decisive accent
+   • #dda15e (sand)         → --clay    decorative-only accent (dots, borders)
+   • #606c38 (olive)        → --link-blue  the calm/informational accent
+     (variable name kept from the prior system to avoid touching every
+     component that references it — it now holds olive, not blue)
+
+   Everything else (charcoal, slate, dust-taupe, lifted, white, soft-bone,
+   border, signal-strong/-light) is a computed tint or shade of those five,
+   same as before — never a sixth unrelated hue.
+
+   Accessibility note: severity badge TEXT now renders in --ink against a
+   light hue-tinted background for all of high/medium/low (verified
+   9.6–9.9:1 contrast), rather than colored text on a colored tint — sand
+   and olive at small badge sizes don't clear 4.5:1 as foreground text, no
+   matter how they're tinted, so the background carries the hue and ink
+   carries the legibility. Critical alone gets a solid fill
+   (--signal-strong, a darkened rust) with white text — 5.0:1 — since it's
+   meant to read as the one alarming, solid-filled state.
    ════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Mastercard palette — verbatim ──────────────────────────────── */
-  --ink:            #141413;
-  --charcoal:       #262627;
-  --slate:          #696969;
-  --granite:        #555555;
-  --graphite:       #565656;
-  --dust-taupe:     #D1CDC7;
+  /* ── Base palette — the 5 given swatches, verbatim ────────────────── */
+  --ink:            #283618;   /* dark forest green */
+  --canvas:         #fefae0;   /* cream */
+  --signal:         #bc6c25;   /* rust */
+  --clay:           #dda15e;   /* sand */
+  --link-blue:      #606c38;   /* olive — see note above on the var name */
 
-  --canvas:         #F3F0EE;   /* page background — never pure white */
-  --lifted:         #FCFBFA;   /* nested "paper on paper" surfaces */
-  --white:          #FFFFFF;   /* floating chrome, modals, satellite CTAs */
-  --soft-bone:      #F4F4F4;
+  /* ── Computed neutrals (tints/shades of ink + canvas) ─────────────── */
+  --charcoal:       #3E4A2F;   /* ink lightened — hover on dark surfaces */
+  --slate:          #5B604D;   /* secondary text — 6.2:1 on canvas */
+  --granite:        #515843;   /* unused alias, kept for parity */
+  --graphite:       #535945;   /* unused alias, kept for parity */
+  --dust-taupe:     #878A6C;   /* faint/disabled text — 3.2:1 on soft-bone */
 
-  --signal:         #CF4500;   /* decisive / urgent */
-  --signal-light:   #F37338;   /* secondary accent, active indicators */
-  --clay:           #9A3A0A;   /* elevated, between ink and signal */
-  --link-blue:      #3860BE;   /* informational */
+  --lifted:         #FEFAE3;   /* canvas, barely lightened — nested surfaces */
+  --white:          #FFFEFA;   /* near-white — floating chrome, modals */
+  --soft-bone:      #FBF1D3;   /* sunken surfaces — table headers etc. */
 
-  /* Brand mark — reserved for the logo only, never used as a UI color */
-  --brand-red:      #EB001B;
-  --brand-yellow:   #F79E1B;
+  /* ── Computed accent variants ──────────────────────────────────────── */
+  --signal-strong:  #9E6122;   /* rust darkened — solid fills + text (5.0:1 w/ white) */
+  --signal-light:   #C78448;   /* rust lightened — secondary warm accent */
 
   /* ── Semantic aliases (what the app actually reaches for) ─────────── */
   --bg:             var(--canvas);
   --surface:        var(--white);
   --surface-sunken: var(--lifted);
   --surface-muted:  var(--soft-bone);
-  --border:         #E4DFD9;          /* derived: ink at ~6% on cream */
-  --border-strong:  #CFC8C0;
+  --border:         #E4E2C8;
+  --border-strong:  #CBCBB0;
 
   --text-primary:   var(--ink);
   --text-secondary: var(--slate);
@@ -63,15 +67,16 @@
   --text-on-ink:    var(--canvas);
   --text-on-signal: var(--white);
 
-  /* Severity — intensity carries hierarchy, not new hues */
+  /* Severity — all of high/medium/low use ink text on a hue-tinted
+     background (verified 9.6–9.9:1); critical alone is a solid fill. */
   --sev-critical-fg:   #FFFFFF;
-  --sev-critical-bg:   var(--signal);
-  --sev-high-fg:        var(--signal);
-  --sev-high-bg:        #FBE7DC;
-  --sev-medium-fg:      var(--clay);
-  --sev-medium-bg:      #F1E1D6;
-  --sev-low-fg:         var(--link-blue);
-  --sev-low-bg:         #E6ECF8;
+  --sev-critical-bg:   var(--signal-strong);
+  --sev-high-fg:        var(--ink);
+  --sev-high-bg:        #F2E0BE;
+  --sev-medium-fg:      var(--ink);
+  --sev-medium-bg:      #F3DEB6;
+  --sev-low-fg:         var(--ink);
+  --sev-low-bg:         #E2E0C2;
 
   /* Lifecycle / outcome status */
   --status-open-fg:        var(--white);
@@ -83,9 +88,8 @@
   --status-dismissed-fg:   var(--dust-taupe);
   --status-dismissed-bg:   var(--soft-bone);
 
-  /* Change-type categorical colors — the 4 remaining distinct hues in
-     the palette, assigned by category only. Meaning is carried by the
-     label, not the hue. */
+  /* Change-type categorical colors — decorative use only (dots, border-left
+     strips), so they stay as the vivid hues rather than contrast-safe ones. */
   --change-deforestation:  var(--signal);
   --change-encroachment:   var(--clay);
   --change-agri:           var(--signal-light);
@@ -125,10 +129,21 @@
   --shadow-1: 0 4px 24px rgba(20, 20, 19, 0.05);
   --shadow-2: 0 18px 40px rgba(20, 20, 19, 0.08);
   --shadow-3: 0 40px 80px rgba(20, 20, 19, 0.16);
+  --shadow-sticky: 0 -2px 12px rgba(20, 20, 19, 0.08);   /* bottom nav / sticky bars */
 
   /* ── Spacing — 8px base unit, half-steps allowed for UI control ──── */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
   --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  /* ── Touch targets — per mobile-ui-optimization skill: iOS HIG 44pt
+     minimum, Android Material 48dp recommended. Desktop controls stay
+     compact (the existing --sp paddings); these are added specifically
+     for the <768px breakpoint. ──────────────────────────────────────── */
+  --touch-min: 44px;
+  --touch-opt: 48px;
+
+  /* ── Mobile chrome ─────────────────────────────────────────────────── */
+  --bottom-nav-h: 60px;   /* + safe-area-inset-bottom, added at the rule site */
 
   /* ── Layout ────────────────────────────────────────────────────────── */
   --sidebar-w:       236px;

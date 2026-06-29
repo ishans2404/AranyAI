@@ -86,17 +86,36 @@
 .workspace-tabs {
   height: var(--workspace-tabs-h); flex-shrink: 0; background: var(--surface);
   border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: var(--sp-5);
-  padding: 0 var(--sp-7);
+  padding: 0 var(--sp-7); overflow-x: auto;
 }
 
 .page-header { margin-bottom: var(--sp-6); }
 .page-header .row-between { align-items: flex-start; }
 .page-subtitle { color: var(--text-secondary); font-size: 13px; margin-top: 3px; }
 
+@media (max-width: 767px) {
+  .page-header.row-between, .page-header .row-between {
+    flex-direction: column; align-items: stretch; gap: var(--sp-3);
+  }
+}
+
+/* ══ Monitor — map + detection panel split ════════════════════════════ */
+.monitor-layout { display: flex; height: 100%; align-items: stretch; }
+.monitor-map { flex: 1; position: relative; min-width: 0; }
+.monitor-panel {
+  width: 340px; flex-shrink: 0; border-left: 1px solid var(--border);
+  background: var(--surface); padding: var(--sp-5);
+}
+@media (max-width: 767px) {
+  .monitor-layout { flex-direction: column; overflow-y: auto; }
+  .monitor-map { flex: none; height: 46vh; min-height: 260px; }
+  .monitor-panel { width: 100%; border-left: none; border-top: 1px solid var(--border); overflow-y: visible; }
+}
+
 /* ══ Login / unauthorized full-screen surfaces ═══════════════════════ */
 .auth-screen {
-  height: 100vh; display: flex; align-items: center; justify-content: center;
-  background: var(--bg); padding: var(--sp-5);
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: var(--sp-5); overflow-y: auto;
 }
 .auth-card { width: 100%; max-width: 420px; }
 .auth-mark {
@@ -119,13 +138,64 @@
 .role-option-title { font-size: 13.5px; font-weight: var(--weight-medium); }
 .role-option-sub { font-size: 11.5px; color: var(--text-secondary); }
 
+/* ══ Bottom navigation — mobile replacement for the sidebar ═══════════
+   Per mobile-ui-optimization/COMPONENTS.md: bottom tab bar for 3-5 core
+   destinations, not a sidebar sliding in from the left. Rendered as a
+   normal (non-fixed) flex sibling of .main-col rather than
+   position:fixed — app-shell switches to column flow below, so the
+   bar just takes its own space at the bottom; no padding-bottom hacks
+   needed to keep content from hiding underneath it. ──────────────────── */
+.bottom-nav { display: none; }
+.bottom-nav-link {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 6px 2px; color: var(--text-secondary); font-size: 10.5px; font-weight: var(--weight-medium);
+}
+.bottom-nav-link svg { flex-shrink: 0; }
+.bottom-nav-link.active { color: var(--ink); }
+.bottom-nav-link:active { background: var(--surface-sunken); }
+
 /* ══ Responsive ════════════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
   :root { --sidebar-w: 200px; }
   .workspace-scroll { padding: var(--sp-5); }
 }
-@media (max-width: 768px) {
-  .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 100; transform: translateX(-100%); }
-  .sidebar.mobile-open { transform: translateX(0); }
-  .topbar-crumb .sep:first-of-type ~ span { display: none; }
+
+@media (max-width: 767px) {
+  .app-shell { flex-direction: column; }
+  .sidebar { display: none; }
+  .main-col { flex: 1; min-height: 0; }
+
+  .bottom-nav {
+    display: flex; flex-shrink: 0; background: var(--surface);
+    border-top: 1px solid var(--border); box-shadow: var(--shadow-sticky);
+    height: var(--bottom-nav-h);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /* The slim department-branding footer competes with the bottom nav
+     for limited vertical space on a phone; the same copy is restored
+     in Settings → System so it isn't lost, just relocated. */
+  .app-footer { display: none; }
+
+  .workspace-scroll { padding: var(--sp-4); }
+  .workspace-tabs { padding: 0 var(--sp-4); gap: var(--sp-4); }
+  .monitor-panel { padding: var(--sp-4); }
+
+  /* Topbar: the full "System Operational · ..." status line and the
+     deeper breadcrumb segments don't fit a 412px width — keep the
+     current page name and the user menu, drop the rest. */
+  .topbar { padding: 0 var(--sp-4); gap: var(--sp-2); }
+  .topbar-crumb { overflow: hidden; }
+  .topbar-crumb > span:not(.current) { display: none; }
+  .topbar-crumb .sep { display: none; }
+  .topbar-status { display: none; }
+  .user-menu-trigger .user-menu-name,
+  .user-menu-trigger .user-menu-role { display: none; }
+  .user-menu-trigger { padding: 4px; }
+}
+
+@media (max-width: 374px) {
+  /* iPhone SE / very small phones — tighten one notch further */
+  .workspace-scroll { padding: var(--sp-3); }
+  .bottom-nav-link { font-size: 9.5px; }
 }

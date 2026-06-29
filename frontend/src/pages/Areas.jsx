@@ -6,6 +6,7 @@ import { useAppData } from '../hooks/useAppData'
 import { ROLES, PERMISSIONS } from '../auth/roles'
 import { api } from '../lib/api'
 import { EmptyState } from '../components/ui/Primitives'
+import ResponsiveTable from '../components/ui/ResponsiveTable'
 
 const EXAMPLE_GEOJSON = `{
   "type": "Polygon",
@@ -48,7 +49,7 @@ function CreateAreaForm({ onCreated }) {
           <label className="form-label">Area name</label>
           <input className="form-control" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
         </div>
-        <div className="row gap-3">
+        <div className="row gap-3 stack-on-mobile">
           <div style={{ flex: 1 }}>
             <label className="form-label">Division</label>
             <input className="form-control" value={form.division} onChange={e => setForm(f => ({ ...f, division: e.target.value }))} />
@@ -63,7 +64,7 @@ function CreateAreaForm({ onCreated }) {
           <textarea className="form-control" required placeholder={EXAMPLE_GEOJSON} value={form.geojson} onChange={e => setForm(f => ({ ...f, geojson: e.target.value }))} />
           <p className="form-hint">Paste a Polygon geometry. Drawing the boundary directly on the map is a planned enhancement (Mapbox GL Draw) — not built yet.</p>
         </div>
-        {error && <p className="t-small" style={{ color: 'var(--signal)' }}>{error}</p>}
+        {error && <p className="t-small" style={{ color: 'var(--signal-strong)' }}>{error}</p>}
         <div className="row gap-2">
           <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Registering…' : 'Register area'}</button>
           <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
@@ -83,6 +84,17 @@ export default function Areas() {
 
   const rangerNamesFor = (aoiId) => rangers.filter(r => r.aoi_ids.includes(aoiId)).map(r => r.name)
 
+  const columns = [
+    { key: 'name', label: 'Area', primary: true, render: a => a.name },
+    { key: 'division', label: 'Division', render: a => a.division || '—' },
+    { key: 'range', label: 'Range', render: a => a.range_name || '—' },
+    ...(isAdmin ? [{ key: 'rangers', label: 'Assigned rangers', render: a => rangerNamesFor(a.id).join(', ') || <span className="t-faint">Unassigned</span> }] : []),
+    {
+      key: 'open', label: '',
+      render: a => <Link to={`/areas/${a.id}/monitor`} className="btn btn-xs btn-secondary" onClick={e => e.stopPropagation()}>Open <ArrowRight size={12} /></Link>,
+    },
+  ]
+
   return (
     <div className="workspace-scroll">
       <div className="page-header row-between">
@@ -93,34 +105,15 @@ export default function Areas() {
         {can(PERMISSIONS.MANAGE_AREAS) && <CreateAreaForm onCreated={refreshAois} />}
       </div>
 
-      {visible.length === 0 ? (
-        <EmptyState icon={<MapPinned size={18} />} title="No areas yet" message={isAdmin ? 'Register the first monitoring area above.' : 'No areas have been assigned to you yet — contact an administrator.'} />
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr><th>Area</th><th>Division</th><th>Range</th>{isAdmin && <th>Assigned rangers</th>}<th></th></tr>
-            </thead>
-            <tbody>
-              {visible.map(a => (
-                <tr key={a.id}>
-                  <td className="t-small" style={{ fontWeight: 500 }}>{a.name}</td>
-                  <td className="t-small t-muted">{a.division || '—'}</td>
-                  <td className="t-small t-muted">{a.range_name || '—'}</td>
-                  {isAdmin && (
-                    <td className="t-small">{rangerNamesFor(a.id).join(', ') || <span className="t-faint">Unassigned</span>}</td>
-                  )}
-                  <td>
-                    <Link to={`/areas/${a.id}/monitor`} className="btn btn-xs btn-secondary">
-                      Open <ArrowRight size={12} />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <ResponsiveTable
+        columns={columns}
+        rows={visible}
+        rowKey="id"
+        emptyState={
+          <EmptyState icon={<MapPinned size={18} />} title="No areas yet"
+            message={isAdmin ? 'Register the first monitoring area above.' : 'No areas have been assigned to you yet — contact an administrator.'} />
+        }
+      />
     </div>
   )
 }

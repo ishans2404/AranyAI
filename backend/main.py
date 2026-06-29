@@ -441,10 +441,10 @@ def get_run_vectors(run_id: str):
 
     features = []
     COLORS = {
-        "deforestation":  "#dc2626",
-        "encroachment":   "#f97316",
-        "agri_in_forest": "#eab308",
-        "tree_to_bare":   "#8b5cf6",
+        "deforestation":  "#BC6C25",
+        "encroachment":   "#DDA15E",
+        "agri_in_forest": "#C78448",
+        "tree_to_bare":   "#606C38",
     }
 
     for v in vectors:

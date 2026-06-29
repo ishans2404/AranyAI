@@ -35,6 +35,10 @@ export default function Settings() {
         <Row label="Detection engine">Google Earth Engine · Dynamic World V1 (10m)</Row>
         <Row label="Methodology">Rolling-baseline anomaly detection</Row>
         <Row label="App version">v0.3.0</Row>
+        <p className="t-small t-faint" style={{ marginTop: 12 }}>
+          © 2026 Chhattisgarh Forest Department · AranyAI Forest Monitoring Platform<br />
+          Powered by Google Earth Engine · Dynamic World V1 · Sentinel-2
+        </p>
       </div>
     </div>
   )
