@@ -1,0 +1,8 @@
+.env
+gee-sa-key.json
+__pycache__/
+*.pyc
+.git/
+scripts/
+eedocs.txt
+*.patch

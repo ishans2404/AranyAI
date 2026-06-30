@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://aranyai-backend-xxxxxxxxxx-uc.a.run.app/api/$1"
+    },
+    {
+      "source": "/health",
+      "destination": "https://aranyai-backend-xxxxxxxxxx-uc.a.run.app/health"
+    }
+  ]
+}

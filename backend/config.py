@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     jwt_secret:           str = "change-me-in-env"
     jwt_algorithm:         str = "HS256"
     jwt_expire_minutes:    int = 60 * 24 * 30  # 30 days — persistent login
+    allowed_origins: list[str] = [
+        "https://aranyai.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:8080",
+    ]
 
 
 settings = Settings()
