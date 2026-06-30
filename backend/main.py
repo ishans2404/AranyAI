@@ -43,7 +43,7 @@ app = FastAPI(title="AranyAI API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=["https://aranyai.vercel.app"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
