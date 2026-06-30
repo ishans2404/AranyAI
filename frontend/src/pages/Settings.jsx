@@ -1,6 +1,7 @@
 import { useAuth } from '../auth/AuthContext'
 import { roleLabel } from '../auth/roles'
 import { initials } from '../lib/format'
+import InstallButton from '../components/InstallButton'
 
 export default function Settings() {
   const { user, logout } = useAuth()
@@ -28,6 +29,15 @@ export default function Settings() {
           permissions) ships.
         </p>
         <button className="btn btn-secondary" onClick={logout}>Sign out</button>
+      </div>
+
+      <div className="card card-pad" style={{ maxWidth: 480, marginBottom: 16 }}>
+        <h3 className="t-card-title" style={{ marginBottom: 10 }}>Install app</h3>
+        <p className="t-small t-muted" style={{ marginBottom: 12 }}>
+          Add AranyAI to your home screen for app-like, full-screen access and offline loading
+          of already-visited pages. Live detection and alerts still need a network connection.
+        </p>
+        <InstallButton />
       </div>
 
       <div className="card card-pad" style={{ maxWidth: 480 }}>

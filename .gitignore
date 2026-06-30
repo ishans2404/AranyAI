@@ -24,6 +24,7 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/.env.local
+frontend/dev-dist/
 
 # ── IDE ───────────────────────────────────────────────────────────────────────
 .vscode/ .idea/ *.swp *.swo
