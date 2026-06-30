@@ -6,3 +6,5 @@ __pycache__/
 scripts/
 eedocs.txt
 *.patch
+frontend/
+docker-compose.yml
