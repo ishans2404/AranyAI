@@ -3,11 +3,16 @@
  * FastAPI backend (see vite.config.js). Endpoint surface matches
  * backend/main.py exactly — nothing added or renamed here.
  */
+const TOKEN_KEY = 'aranyai.token'
 
 async function req(method, path, body) {
+  const token = localStorage.getItem(TOKEN_KEY)
   const res = await fetch(path, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {
@@ -25,6 +30,10 @@ function toQuery(params = {}) {
 
 export const api = {
   health: () => req('GET', '/health'),
+
+  // Auth
+  login: (email, password) => req('POST', '/api/auth/login', { email, password }),
+  me:    () => req('GET', '/api/auth/me'),
 
   // AOIs
   listAois:   () => req('GET', '/api/aois'),

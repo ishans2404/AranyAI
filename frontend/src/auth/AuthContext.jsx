@@ -1,37 +1,46 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { hasPermission, ROLES } from './roles'
+import { hasPermission } from './roles'
+import { api } from '../lib/api'
 
-const STORAGE_KEY = 'aranyai.session'
+const TOKEN_KEY = 'aranyai.token'
 
 const AuthContext = createContext(null)
 
-function readStoredUser() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
+/**
+ * Persistent login: the JWT lives in localStorage (not just memory), and
+ * on mount we verify it against GET /api/auth/me before rendering any
+ * protected route. `loading` covers that verification window so
+ * ProtectedRoute doesn't bounce a still-valid session to /login.
+ */
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(readStoredUser)
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (user) localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
-    else localStorage.removeItem(STORAGE_KEY)
-  }, [user])
-
-  const login = useCallback((role, name) => {
-    setUser({ role, name: name || (role === ROLES.ADMIN ? 'Administrator' : name) })
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!token) { setLoading(false); return }
+    api.me()
+      .then(setUser)
+      .catch(() => { localStorage.removeItem(TOKEN_KEY) })
+      .finally(() => setLoading(false))
   }, [])
 
-  const logout = useCallback(() => setUser(null), [])
+  const login = useCallback(async (email, password) => {
+    const { token, user: u } = await api.login(email, password)
+    localStorage.setItem(TOKEN_KEY, token)
+    setUser(u)
+    return u
+  }, [])
+
+  const logout = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY)
+    setUser(null)
+  }, [])
 
   const can = useCallback((permission) => hasPermission(user?.role, permission), [user])
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, can }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, can }}>
       {children}
     </AuthContext.Provider>
   )

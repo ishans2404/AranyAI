@@ -173,3 +173,20 @@ class RangerAssignment(Base):
     ranger_name = Column(String, nullable=False)
     aoi_id      = Column(String, nullable=False)
     created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+class User(Base):
+    """
+    Real auth user. `name` should match RangerAssignment.ranger_name for
+    ranger-role accounts so area-scoping (AreaAccessGuard) keeps working
+    unchanged. Passwords are bcrypt-hashed — see backend/auth.py.
+    """
+    __tablename__ = "users"
+    id            = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email         = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    name          = Column(String, nullable=False)
+    role          = Column(String, nullable=False, default="ranger")   # admin | ranger
+    is_active     = Column(Boolean, default=True)
+    created_at    = Column(DateTime, default=datetime.utcnow)
+    last_login_at = Column(DateTime)

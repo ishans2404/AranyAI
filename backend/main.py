@@ -15,12 +15,13 @@ from datetime import date, datetime, timedelta
 from typing import Literal, Optional
 
 import ee
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from .auth import create_access_token, get_current_user, verify_password
 from .config import settings
-from .database import Alert, AOI, Base, ChangeRun, ChangeVector, RangerAssignment, Site, engine, get_session
+from .database import Alert, AOI, Base, ChangeRun, ChangeVector, RangerAssignment, Site, User, engine, get_session
 from .gee_runner import (
     _class_distribution, _composite, _init, DW_PALETTE,
     get_tile_urls, run_gee_detection,
@@ -48,7 +49,10 @@ app.add_middleware(
 )
 
 
-# ── Request schemas ───────────────────────────────────────────────────────────
+class LoginRequest(BaseModel):
+    email:    str
+    password: str
+
 
 class AOICreate(BaseModel):
     name:       str
@@ -134,6 +138,31 @@ def _site_dict(s: Site) -> dict:
         "precision_total":     s.precision_total,
         "precision":           precision,
     }
+
+
+# ── Auth routes ───────────────────────────────────────────────────────────────
+
+@app.post("/api/auth/login")
+def login(body: LoginRequest):
+    with get_session() as db:
+        user = (
+            db.query(User)
+            .filter(User.email == body.email.strip().lower(), User.is_active == True)
+            .first()
+        )
+        if not user or not verify_password(body.password, user.password_hash):
+            raise HTTPException(401, "Invalid email or password")
+        user.last_login_at = datetime.utcnow()
+        token = create_access_token(user)
+        return {
+            "token": token,
+            "user": {"id": user.id, "email": user.email, "name": user.name, "role": user.role},
+        }
+
+
+@app.get("/api/auth/me")
+def me(current_user: dict = Depends(get_current_user)):
+    return current_user
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

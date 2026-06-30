@@ -29,10 +29,10 @@ export default function Topbar({ crumbs = [] }) {
       </div>
 
       <div className="row gap-4">
-        <div className="row gap-2 t-small t-muted topbar-status">
+        {/* <div className="row gap-2 t-small t-muted topbar-status">
           <span className="dot" style={{ width: 6, height: 6, background: 'var(--link-blue)' }} />
           System Operational · Google Earth Engine · Dynamic World V1 (10m)
-        </div>
+        </div> */}
 
         <div className="user-menu" ref={ref}>
           <button className="user-menu-trigger" onClick={() => setOpen(o => !o)}>

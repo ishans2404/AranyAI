@@ -5,9 +5,10 @@ import { useAppData } from '../hooks/useAppData'
 
 /** Requires a signed-in user; optionally a specific permission. */
 export function ProtectedRoute({ permission }) {
-  const { user, can } = useAuth()
+  const { user, loading, can } = useAuth()
   const location = useLocation()
 
+  if (loading) return null
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
   if (permission && !can(permission)) return <Navigate to="/unauthorized" replace />
   return <Outlet />

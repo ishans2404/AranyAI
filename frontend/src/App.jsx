@@ -4,6 +4,7 @@ import { AppDataProvider } from './hooks/useAppData'
 import { ProtectedRoute, AreaAccessGuard } from './auth/ProtectedRoute'
 import { PERMISSIONS } from './auth/roles'
 
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import { Unauthorized, NotFound } from './pages/Fallback'
 import AppLayout from './layouts/AppLayout'
@@ -32,13 +33,13 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           <Route element={<ProtectedRoute />}>
             <Route element={<AuthedShell />}>
               <Route element={<AppLayout />}>
-                <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="alerts" element={<Alerts />} />
                 <Route path="areas" element={<Areas />} />
