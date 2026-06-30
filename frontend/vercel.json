@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://aranyai-backend-xxxxxxxxxx-uc.a.run.app/api/$1"
+      "destination": "https://aranyai-backend-386800392984.asia-south1.run.app/api/$1"
     },
     {
       "source": "/health",
-      "destination": "https://aranyai-backend-xxxxxxxxxx-uc.a.run.app/health"
+      "destination": "https://aranyai-backend-386800392984.asia-south1.run.app/health"
     }
   ]
 }
