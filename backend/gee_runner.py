@@ -290,6 +290,15 @@ def _anomaly_zscore(current_trees, median_img, stddev_img):
     near-constant pixels (permanent water, dense built-up — where
     trees-probability barely moves) don't produce extreme z from
     dividing by a near-zero denominator.
+
+    Precondition: current_trees must carry a real 'trees_current' band,
+    i.e. the current-period collection was non-empty. An image built
+    from ImageCollection.mean() over zero images has zero bands, and
+    subtract()/divide() against the 1-band baseline only raises once
+    .getInfo() is eventually called somewhere downstream — by which
+    point the error no longer points at this function. Callers must
+    check the image count themselves first (see the c_count == 0 guard
+    in run_gee_detection()) rather than rely on this function to catch it.
     """
     safe_stddev = stddev_img.max(0.02)
     return current_trees.subtract(median_img).divide(safe_stddev).rename("z")
@@ -574,6 +583,42 @@ def run_gee_detection(
                 f"Only {b_count} baseline image(s) over {baseline_start}\u2192{baseline_end} "
                 "— not enough history yet to build a reliable seasonal envelope."
             )
+
+        if c_count == 0:
+            # No current-period DW imagery at all (monsoon cloud cover is the
+            # usual cause). dw.select("trees").mean() over an empty
+            # collection returns a zero-band image, and any arithmetic
+            # against the 1-band baseline (z-score, candidate mask, area
+            # stats) doesn't fail here — GEE is lazy — it fails later and
+            # opaquely, the first time .getInfo() is called downstream
+            # ("Image.subtract: If one image has no bands, the other must
+            # also have no bands"). Bail out now, before constructing any
+            # of that, instead of letting it surface as an unhandled
+            # EEException three steps removed from the actual cause.
+            msg = (
+                f"No Dynamic World imagery for the current window "
+                f"{current_start}\u2192{current_end} — likely monsoon cloud cover. "
+                "Anomaly detection skipped for this run; baseline is unaffected."
+            )
+            log.warning("[%s] %s", run_id[:8], msg)
+            with get_session() as db:
+                run = db.query(ChangeRun).filter(ChangeRun.id == run_id).first()
+                run.status            = "low_confidence"
+                run.detection_mode    = mode
+                run.baseline_start    = datetime.strptime(baseline_start, "%Y-%m-%d").date()
+                run.baseline_end      = datetime.strptime(baseline_end, "%Y-%m-%d").date()
+                run.current_start     = datetime.strptime(current_start, "%Y-%m-%d").date()
+                run.current_end       = datetime.strptime(current_end, "%Y-%m-%d").date()
+                run.baseline_images   = b_count
+                run.current_images    = c_count
+                run.deforestation_ha  = 0.0
+                run.encroachment_ha   = 0.0
+                run.agri_in_forest_ha = 0.0
+                run.tree_to_bare_ha   = 0.0
+                run.any_change_ha     = 0.0
+                run.gee_task_ids      = json.dumps({"warning": msg})
+            log.info("[%s] complete  status=low_confidence  reason=no_current_imagery", run_id[:8])
+            return
 
         run_status = "done"
         if c_count < 2:

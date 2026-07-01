@@ -424,14 +424,35 @@ def get_run_tiles(run_id: str, refresh: bool = False):
                 "cached":     True,
             }
 
+        baseline_start = str(run.baseline_start)
         baseline_end = str(run.baseline_end)
         current_start = str(run.current_start)
         current_end  = str(run.current_end)
+        current_images = run.current_images
 
     _init()
     aoi = ee.Geometry(aoi_geojson)
-    c_label, _, _, _ = _composite(aoi, current_start, current_end)
-    urls = get_tile_urls(aoi, baseline_end, current_end, c_label)
+
+    if current_images == 0:
+        # Mirrors the gee_runner.run_gee_detection guard: this run was
+        # marked low_confidence because the current-period DW collection
+        # was empty (monsoon cloud cover, usually). _composite() on that
+        # window returns a zero-band label, and visualize()/getMapId()
+        # on it raises the same opaque band-mismatch error once GEE
+        # actually evaluates it. Fall back to the baseline composite so
+        # the map still shows the last known-good land cover instead of
+        # erroring, and skip the "after" tile — there's nothing recent to show.
+        b_label, _, _, _ = _composite(aoi, baseline_start, baseline_end)
+        urls = get_tile_urls(aoi, baseline_end, baseline_end, b_label)
+        urls["after_s2"] = None
+        tile_message = (
+            "No current-period Dynamic World imagery (likely monsoon cloud "
+            "cover) — showing the last available baseline land cover instead."
+        )
+    else:
+        c_label, _, _, _ = _composite(aoi, current_start, current_end)
+        urls = get_tile_urls(aoi, baseline_end, current_end, c_label)
+        tile_message = None
 
     expires = datetime.utcnow() + timedelta(hours=2)
     with get_session() as db:
@@ -448,6 +469,7 @@ def get_run_tiles(run_id: str, refresh: bool = False):
         "aoi_geojson": aoi_geojson,
         "expires_at":  str(expires),
         "cached":      False,
+        "message":     tile_message,
     }
 
 
